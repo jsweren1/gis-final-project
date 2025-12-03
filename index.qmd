@@ -11,7 +11,10 @@ format:
     embed-resources: true
     code-fold: true
     echo: true
-    warning: false
+execute:
+  warning: false
+  message: false
+toc: true
 ---
 
 ```{r}
@@ -39,8 +42,7 @@ library(leaflet)
 
 ## Plotting the Docks
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ### Washington, DC
 
 ```{r}
@@ -199,13 +201,11 @@ docks_chi <- st_intersection(
 mapview(hull_buffered_wgs84_chi, col.regions = "lightblue", alpha.regions = 0.3) +
   mapview(docks_chi, col.regions = "red")
 ```
-
 :::
 
 ## Plotting Other Data
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ### Washington, DC
 
 ```{r}
@@ -706,13 +706,11 @@ leaflet() %>%
     options = leaflet::layersControlOptions(collapsed = FALSE)
   )
 ```
-
 :::
 
 ## Univariate Testing
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ### Washington, DC
 
 ```{r}
@@ -828,7 +826,6 @@ inv_dist <- sapply(1:nrow(coords), function(i) {
 moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
 moran_result
 ```
-
 :::
 
 ### Results
@@ -843,8 +840,7 @@ moran_result
 
 ## Hypothesis Test: Population Density
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ### Washington, DC
 
 ```{r}
@@ -1195,13 +1191,12 @@ m1 <- ppm(dock_ppp ~ pop_im)
 summary(m1)
 anova(m0, m1, test="LR")
 ```
-
 :::
 
 ### Results
 
 | City | Docks | Dock Intensity (points/unit squared) | `pop_im` coefficient | Z-value | Deviance diff |
-|------------|------------|------------|------------|------------|------------|
+|-----------|------|-------------------|------------|-------|---------|
 | Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $1.913 \times 10^{-4}$ | $33.74$ | $683.18$ |
 | New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $2.121 \times 10^-5$ | $22.44$ | $436.56$ |
 | Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $9.189 \times 10^{-5}$ | $11.41$ | $105.4$ |
@@ -1210,8 +1205,7 @@ anova(m0, m1, test="LR")
 
 ## Hypothesis Test: Other Transit options
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ### Washington, DC
 
 ```{r}
@@ -1356,13 +1350,12 @@ m1 <- ppm(dock_ppp ~ dist_im)
 anova(m0, m1, test = "LR")
 summary(m1)
 ```
-
 :::
 
 ### Results
 
 | City | Docks | Dock Intensity (points/unit squared) | `dist_im` coefficient | Z-value | Deviance diff |
-|---------------|------------|------------|------------|------------|------------|
+|------------|------------|----------------|------------|------------|------------|
 | Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $-1.09 \times 10^{-3}$ | $-23.96$ | $1112.3$ |
 | New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $-1.61 \times 10^{-3}$ | $-25.90$ | $1174.6$ |
 | Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $-1.46 \times 10^{-3}$ | $-12.29$ | $263.95$ |
