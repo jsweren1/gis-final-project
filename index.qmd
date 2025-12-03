@@ -1,0 +1,1370 @@
+---
+title: Strategic Analysis of Micromobility Dock Deployment
+authors:
+  - name: Joshua Sweren
+    affiliation: Georgetown University
+    roles: writing
+    corresponding: true
+bibliography: references.bib
+format:
+  html:
+    embed-resources: true
+    code-fold: true
+    echo: true
+    warning: false
+---
+
+```{r}
+#install.packages(c("osmdata", "sf", "dplyr", "ggplot2", "rnaturalearth"))
+library(osmdata)
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(rnaturalearth)
+library(osmextract)
+library(tigris)
+library(mapview)
+library(lehdr)
+library(viridis)
+library(viridisLite)
+library(spatstat)
+library(units)
+library(spdep)
+library(terra)
+library(raster)
+library(tictoc)
+library(tidycensus)
+library(leaflet)
+```
+
+## Plotting the Docks
+
+::: {.panel-tabset}
+
+### Washington, DC
+
+```{r}
+dc_bb <- c(xmin = -77.45, ymin = 38.70, xmax = -76.80, ymax = 39.10)
+docks_raw_dc <- opq(bbox = dc_bb) |>
+  add_osm_feature(key = "amenity", value = "bicycle_rental") |>
+  add_osm_feature(key = "network", value = "Capital Bikeshare") |>
+  osmdata_sf()
+
+docks_dc <- docks_raw_dc$osm_points |>
+  st_as_sf() |>
+  st_transform(3857) %>%
+  filter(!is.na(network))
+```
+
+```{r}
+hull_dc <- docks_dc |> 
+    st_union() |> 
+    st_convex_hull()
+hull_buffered_dc <- st_buffer(hull_dc, dist = 2500)
+hull_buffered_wgs84_dc <- st_transform(hull_buffered_dc, 4326)
+docks_dc <- st_intersection(
+    st_transform(docks_dc, 4326), 
+    hull_buffered_wgs84_dc)
+```
+
+```{r}
+mapview(hull_buffered_wgs84_dc, col.regions = "lightblue", alpha.regions = 0.3) +
+  mapview(docks_dc, col.regions = "red")
+```
+
+### New York, NY
+
+```{r}
+nyc_bb <- c(xmin = -74.15, ymin = 40.55, xmax = -73.70, ymax = 40.95)
+docks_raw_nyc <- opq(bbox = nyc_bb) |>
+  add_osm_feature(key = "amenity", value = "bicycle_rental") |>
+  add_osm_feature(key = "network", value = "Citi Bike") |>
+  osmdata_sf()
+
+docks_nyc <- docks_raw_nyc$osm_points |>
+  st_as_sf() |>
+  st_transform(3857) %>%
+  filter(!is.na(network))
+```
+
+```{r}
+hull_nyc <- docks_nyc |> 
+  st_union() |> 
+  st_convex_hull()
+hull_buffered_nyc <- st_buffer(hull_nyc, dist = 500)
+hull_buffered_wgs84_nyc <- st_transform(hull_buffered_nyc, 4326)
+docks_nyc <- st_intersection(
+  st_transform(docks_nyc, 4326),
+  hull_buffered_wgs84_nyc
+)
+```
+
+```{r}
+mapview(hull_buffered_wgs84_nyc, col.regions = "lightblue", alpha.regions = 0.3) +
+  mapview(docks_nyc, col.regions = "red")
+```
+
+### Boston, MA
+
+```{r}
+bos_bb <- c(-71.20, 42.20, -70.90, 42.45)
+docks_raw_bos <- opq(bbox = bos_bb) |>
+  add_osm_feature(key = "amenity", value = "bicycle_rental") |>
+  add_osm_feature(key = "network", value = "Bluebikes") |>
+  osmdata_sf()
+
+docks_bos <- docks_raw_bos$osm_points |>
+  st_as_sf() |>
+  st_transform(3857) %>%
+  filter(!is.na(network))
+```
+
+```{r}
+hull_bos <- docks_bos |> 
+  st_union() |> 
+  st_convex_hull()
+hull_buffered_bos <- st_buffer(hull_bos, dist = 2500)
+hull_buffered_wgs84_bos <- st_transform(hull_buffered_bos, 4326)
+docks_bos <- st_intersection(
+  st_transform(docks_bos, 4326),
+  hull_buffered_wgs84_bos
+)
+```
+
+```{r}
+mapview(hull_buffered_wgs84_bos, col.regions = "lightblue", alpha.regions = 0.3) +
+  mapview(docks_bos, col.regions = "red")
+```
+
+### San Francisco, CA
+
+```{r}
+sf_bb <- c(-122.55, 37.70, -122.35, 37.85)
+docks_raw_sf <- opq(bbox = sf_bb) |>
+  add_osm_feature(key = "amenity", value = "bicycle_rental") |>
+  add_osm_feature(key = "network", value = "Bay Wheels") |>
+  osmdata_sf()
+
+docks_sf <- docks_raw_sf$osm_points |>
+  st_as_sf() |>
+  st_transform(3857) %>%
+  filter(!is.na(network))
+```
+
+```{r}
+hull_sf <- docks_sf |> 
+  st_union() |> 
+  st_convex_hull()
+hull_buffered_sf <- st_buffer(hull_sf, dist = 500)
+hull_buffered_wgs84_sf <- st_transform(hull_buffered_sf, 4326)
+docks_sf <- st_intersection(
+  st_transform(docks_sf, 4326),
+  hull_buffered_wgs84_sf
+)
+```
+
+```{r}
+mapview(hull_buffered_wgs84_sf, col.regions = "lightblue", alpha.regions = 0.3) +
+  mapview(docks_sf, col.regions = "red")
+```
+
+### Chicago, IL
+
+```{r}
+chi_bb <- c(-87.80, 41.75, -87.55, 42.00)
+docks_raw_chi <- opq(bbox = chi_bb) |>
+  add_osm_feature(key = "amenity", value = "bicycle_rental") |>
+  add_osm_feature(key = "network", value = "Divvy") |>
+  osmdata_sf()
+
+docks_chi <- docks_raw_chi$osm_points |>
+  st_as_sf() |>
+  st_transform(3857) %>%
+  filter(!is.na(network))
+```
+
+```{r}
+hull_chi <- docks_chi |> 
+  st_union() |> 
+  st_convex_hull()
+hull_buffered_chi <- st_buffer(hull_chi, dist = 2500)
+hull_buffered_wgs84_chi <- st_transform(hull_buffered_chi, 4326)
+docks_chi <- st_intersection(
+  st_transform(docks_chi, 4326),
+  hull_buffered_wgs84_chi
+)
+```
+
+```{r}
+mapview(hull_buffered_wgs84_chi, col.regions = "lightblue", alpha.regions = 0.3) +
+  mapview(docks_chi, col.regions = "red")
+```
+
+:::
+
+## Plotting Other Data
+
+::: {.panel-tabset}
+
+### Washington, DC
+
+```{r}
+#census_api_key("5e8593d6e289e6ae04c33a019f4951ca2bdd9523", install = TRUE)
+dc_bg <- get_acs(
+  geography = "block group",
+  variables = "B01003_001E",
+  year = 2022,
+  survey = "acs5",
+  state = c("DC", "MD", "VA"),
+  geometry = TRUE
+)
+```
+
+```{r}
+dc_bg <- st_transform(dc_bg, st_crs(hull_buffered_wgs84_dc))
+
+dc_bg <- dc_bg %>%
+  mutate(area_original = as.numeric(st_area(geometry)))
+
+dc_bg_clipped <- st_intersection(dc_bg, hull_buffered_wgs84_dc)
+
+dc_bg_clipped <- dc_bg_clipped %>%
+  mutate(
+    area_clipped = as.numeric(st_area(geometry)),
+    pop_adjusted = estimate * (area_clipped / area_original),
+    area_km2 = area_clipped / 1e6,
+    pop_density = pop_adjusted / area_km2
+  )
+
+dc_bg_density <- dc_bg_clipped %>%
+  mutate(
+    area_km2 = as.numeric(st_area(geometry)) / 1e6,
+    pop_density = estimate / area_km2
+  )
+```
+
+```{r}
+max_density <- 20000
+dc_bg_density$pop_density_plot <- pmin(dc_bg_density$pop_density, max_density)
+```
+
+```{r}
+dc_bbox <- st_bbox(hull_buffered_wgs84_dc)
+
+# bus_stops <- opq(bbox) %>%
+#   add_osm_feature(key = "highway", value = "bus_stop") %>%
+#   osmdata_sf() %>%
+#   .$osm_points %>%
+#   st_transform(st_crs(hull_buffered_wgs84_dc))
+
+stations_dc <- opq(dc_bbox) %>%
+  add_osm_feature(key = "railway", value = "station") %>%
+  osmdata_sf() %>%
+  .$osm_points %>%
+  st_transform(st_crs(hull_buffered_wgs84_dc))
+```
+
+```{r}
+pal <- leaflet::colorNumeric(viridis(20), domain = dc_bg_density$pop_density_plot)
+leaflet() %>%
+  leaflet::addProviderTiles("CartoDB.Positron") %>%
+  
+  # Population density polygons
+  leaflet::addPolygons(
+    data = dc_bg_density,
+    fillColor = ~pal(pop_density_plot),
+    fillOpacity = 0.6,
+    color = "grey",
+    weight = 0.5,
+    group = "Population Density",
+    popup = ~paste0("Population density: ", round(pop_density_plot))
+  ) %>%
+  
+  # Dock locations
+  leaflet::addCircleMarkers(
+    data = docks_dc,
+    radius = 1,
+    color = "blue",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Bikeshare Docks"
+  ) %>%
+  
+  # Train stations
+  leaflet::addCircleMarkers(
+    data = stations_dc,
+    radius = 1,
+    color = "red",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Train Stations"
+  ) %>%
+  
+  # Layer controls
+  leaflet::addLayersControl(
+    overlayGroups = c("Population Density", "Bikeshare Docks", "Train Stations"),
+    options = leaflet::layersControlOptions(collapsed = FALSE)
+  )
+```
+
+### New York, NY
+
+```{r}
+nyc_bg <- get_acs(
+  geography = "block group",
+  variables = "B01003_001E",
+  year = 2022,
+  survey = "acs5",
+  state = c("NY", "NJ"),
+  geometry = TRUE
+)
+```
+
+```{r}
+nyc_bg <- st_transform(nyc_bg, st_crs(hull_buffered_wgs84_nyc))
+
+nyc_bg <- nyc_bg %>%
+  mutate(area_original = as.numeric(st_area(geometry)))
+
+nyc_bg_clipped <- st_intersection(nyc_bg, hull_buffered_wgs84_nyc)
+
+nyc_bg_clipped <- nyc_bg_clipped %>%
+  mutate(
+    area_clipped = as.numeric(st_area(geometry)),
+    pop_adjusted = estimate * (area_clipped / area_original),
+    area_km2 = area_clipped / 1e6,
+    pop_density = pop_adjusted / area_km2
+  )
+
+nyc_bg_density <- nyc_bg_clipped %>%
+  mutate(
+    area_km2 = as.numeric(st_area(geometry)) / 1e6,
+    pop_density = estimate / area_km2
+  )
+```
+
+```{r}
+max_density <- 75000
+nyc_bg_density$pop_density_plot <- pmin(nyc_bg_density$pop_density, max_density)
+```
+
+```{r}
+nyc_bbox <- st_bbox(hull_buffered_wgs84_nyc)
+
+# bus_stops <- opq(bbox) %>%
+#   add_osm_feature(key = "highway", value = "bus_stop") %>%
+#   osmdata_sf() %>%
+#   .$osm_points %>%
+#   st_transform(st_crs(hull_buffered_wgs84_dc))
+
+stations_nyc <- opq(nyc_bbox) %>%
+  add_osm_feature(key = "railway", value = "station") %>%
+  osmdata_sf() %>%
+  .$osm_points %>%
+  st_transform(st_crs(hull_buffered_wgs84_nyc))
+```
+
+```{r}
+pal <- leaflet::colorNumeric(viridis(20), domain = nyc_bg_density$pop_density_plot)
+leaflet() %>%
+  leaflet::addProviderTiles("CartoDB.Positron") %>%
+  
+  # Population density polygons
+  leaflet::addPolygons(
+    data = nyc_bg_density,
+    fillColor = ~pal(pop_density_plot),
+    fillOpacity = 0.6,
+    color = "grey",
+    weight = 0.5,
+    group = "Population Density",
+    popup = ~paste0("Population density: ", round(pop_density_plot))
+  ) %>%
+  
+  # Dock locations
+  leaflet::addCircleMarkers(
+    data = docks_nyc,
+    radius = 1,
+    color = "blue",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Bikeshare Docks"
+  ) %>%
+  
+  # Train stations
+  leaflet::addCircleMarkers(
+    data = stations_nyc,
+    radius = 1,
+    color = "red",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Train Stations"
+  ) %>%
+  
+  # Layer controls
+  leaflet::addLayersControl(
+    overlayGroups = c("Population Density", "Bikeshare Docks", "Train Stations"),
+    options = leaflet::layersControlOptions(collapsed = FALSE)
+  )
+```
+
+### Boston, MA
+
+```{r}
+bos_bg <- get_acs(
+  geography = "block group",
+  variables = "B01003_001E",
+  year = 2022,
+  survey = "acs5",
+  state = c("MA"),
+  geometry = TRUE
+)
+```
+
+```{r}
+bos_bg <- st_transform(bos_bg, st_crs(hull_buffered_wgs84_bos))
+
+bos_bg <- bos_bg %>%
+  mutate(area_original = as.numeric(st_area(geometry)))
+
+bos_bg_clipped <- st_intersection(bos_bg, hull_buffered_wgs84_bos)
+
+bos_bg_clipped <- bos_bg_clipped %>%
+  mutate(
+    area_clipped = as.numeric(st_area(geometry)),
+    pop_adjusted = estimate * (area_clipped / area_original),
+    area_km2 = area_clipped / 1e6,
+    pop_density = pop_adjusted / area_km2
+  )
+
+bos_bg_density <- bos_bg_clipped %>%
+  mutate(
+    area_km2 = as.numeric(st_area(geometry)) / 1e6,
+    pop_density = estimate / area_km2
+  )
+```
+
+```{r}
+max_density <- 25000
+bos_bg_density$pop_density_plot <- pmin(bos_bg_density$pop_density, max_density)
+```
+
+```{r}
+bos_bbox <- st_bbox(hull_buffered_wgs84_bos)
+
+# bus_stops <- opq(bbox) %>%
+#   add_osm_feature(key = "highway", value = "bus_stop") %>%
+#   osmdata_sf() %>%
+#   .$osm_points %>%
+#   st_transform(st_crs(hull_buffered_wgs84_dc))
+
+stations_bos <- opq(bos_bbox) %>%
+  add_osm_feature(key = "railway", value = "station") %>%
+  osmdata_sf() %>%
+  .$osm_points %>%
+  st_transform(st_crs(hull_buffered_wgs84_bos))
+```
+
+```{r}
+pal <- leaflet::colorNumeric(viridis(20), domain = bos_bg_density$pop_density_plot)
+leaflet() %>%
+  leaflet::addProviderTiles("CartoDB.Positron") %>%
+  
+  # Population density polygons
+  leaflet::addPolygons(
+    data = bos_bg_density,
+    fillColor = ~pal(pop_density_plot),
+    fillOpacity = 0.6,
+    color = "grey",
+    weight = 0.5,
+    group = "Population Density",
+    popup = ~paste0("Population density: ", round(pop_density_plot))
+  ) %>%
+  
+  # Dock locations
+  leaflet::addCircleMarkers(
+    data = docks_bos,
+    radius = 1,
+    color = "blue",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Bikeshare Docks"
+  ) %>%
+  
+  # Train stations
+  leaflet::addCircleMarkers(
+    data = stations_bos,
+    radius = 1,
+    color = "red",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Train Stations"
+  ) %>%
+  
+  # Layer controls
+  leaflet::addLayersControl(
+    overlayGroups = c("Population Density", "Bikeshare Docks", "Train Stations"),
+    options = leaflet::layersControlOptions(collapsed = FALSE)
+  )
+```
+
+### San Francisco, CA
+
+```{r}
+sf_bg <- get_acs(
+  geography = "block group",
+  variables = "B01003_001E",
+  year = 2022,
+  survey = "acs5",
+  state = c("CA"),
+  geometry = TRUE
+)
+```
+
+```{r}
+sf_bg <- st_transform(sf_bg, st_crs(hull_buffered_wgs84_sf))
+
+sf_bg <- sf_bg %>%
+  mutate(area_original = as.numeric(st_area(geometry)))
+
+sf_bg_clipped <- st_intersection(sf_bg, hull_buffered_wgs84_sf)
+
+sf_bg_clipped <- sf_bg_clipped %>%
+  mutate(
+    area_clipped = as.numeric(st_area(geometry)),
+    pop_adjusted = estimate * (area_clipped / area_original),
+    area_km2 = area_clipped / 1e6,
+    pop_density = pop_adjusted / area_km2
+  )
+
+sf_bg_density <- sf_bg_clipped %>%
+  mutate(
+    area_km2 = as.numeric(st_area(geometry)) / 1e6,
+    pop_density = estimate / area_km2
+  )
+```
+
+```{r}
+max_density <- 25000
+sf_bg_density$pop_density_plot <- pmin(sf_bg_density$pop_density, max_density)
+```
+
+```{r}
+sf_bbox <- st_bbox(hull_buffered_wgs84_sf)
+
+# bus_stops <- opq(bbox) %>%
+#   add_osm_feature(key = "highway", value = "bus_stop") %>%
+#   osmdata_sf() %>%
+#   .$osm_points %>%
+#   st_transform(st_crs(hull_buffered_wgs84_dc))
+
+stations_sf <- opq(sf_bbox) %>%
+  add_osm_feature(key = "railway", value = "station") %>%
+  osmdata_sf() %>%
+  .$osm_points %>%
+  st_transform(st_crs(hull_buffered_wgs84_sf))
+```
+
+```{r}
+pal <- leaflet::colorNumeric(viridis(20), domain = sf_bg_density$pop_density_plot)
+leaflet() %>%
+  leaflet::addProviderTiles("CartoDB.Positron") %>%
+  
+  # Population density polygons
+  leaflet::addPolygons(
+    data = sf_bg_density,
+    fillColor = ~pal(pop_density_plot),
+    fillOpacity = 0.6,
+    color = "grey",
+    weight = 0.5,
+    group = "Population Density",
+    popup = ~paste0("Population density: ", round(pop_density_plot))
+  ) %>%
+  
+  # Dock locations
+  leaflet::addCircleMarkers(
+    data = docks_sf,
+    radius = 1,
+    color = "blue",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Bikeshare Docks"
+  ) %>%
+  
+  # Train stations
+  leaflet::addCircleMarkers(
+    data = stations_sf,
+    radius = 1,
+    color = "red",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Train Stations"
+  ) %>%
+  
+  # Layer controls
+  leaflet::addLayersControl(
+    overlayGroups = c("Population Density", "Bikeshare Docks", "Train Stations"),
+    options = leaflet::layersControlOptions(collapsed = FALSE)
+  )
+```
+
+### Chicago, IL
+
+```{r}
+chi_bg <- get_acs(
+  geography = "block group",
+  variables = "B01003_001E",
+  year = 2022,
+  survey = "acs5",
+  state = c("IL"),
+  geometry = TRUE
+)
+```
+
+```{r}
+chi_bg <- st_transform(chi_bg, st_crs(hull_buffered_wgs84_chi))
+
+chi_bg <- chi_bg %>%
+  mutate(area_original = as.numeric(st_area(geometry)))
+
+chi_bg_clipped <- st_intersection(chi_bg, hull_buffered_wgs84_chi)
+
+chi_bg_clipped <- chi_bg_clipped %>%
+  mutate(
+    area_clipped = as.numeric(st_area(geometry)),
+    pop_adjusted = estimate * (area_clipped / area_original),
+    area_km2 = area_clipped / 1e6,
+    pop_density = pop_adjusted / area_km2
+  )
+
+chi_bg_density <- chi_bg_clipped %>%
+  mutate(
+    area_km2 = as.numeric(st_area(geometry)) / 1e6,
+    pop_density = estimate / area_km2
+  )
+```
+
+```{r}
+max_density <- 30000
+chi_bg_density$pop_density_plot <- pmin(chi_bg_density$pop_density, max_density)
+```
+
+```{r}
+chi_bbox <- st_bbox(hull_buffered_wgs84_chi)
+
+# bus_stops <- opq(bbox) %>%
+#   add_osm_feature(key = "highway", value = "bus_stop") %>%
+#   osmdata_sf() %>%
+#   .$osm_points %>%
+#   st_transform(st_crs(hull_buffered_wgs84_dc))
+
+stations_chi <- opq(chi_bbox) %>%
+  add_osm_feature(key = "railway", value = "station") %>%
+  osmdata_sf() %>%
+  .$osm_points %>%
+  st_transform(st_crs(hull_buffered_wgs84_chi))
+```
+
+```{r}
+pal <- leaflet::colorNumeric(viridis(20), domain = chi_bg_density$pop_density_plot)
+leaflet() %>%
+  leaflet::addProviderTiles("CartoDB.Positron") %>%
+  
+  # Population density polygons
+  leaflet::addPolygons(
+    data = chi_bg_density,
+    fillColor = ~pal(pop_density_plot),
+    fillOpacity = 0.6,
+    color = "grey",
+    weight = 0.5,
+    group = "Population Density",
+    popup = ~paste0("Population density: ", round(pop_density_plot))
+  ) %>%
+  
+  # Dock locations
+  leaflet::addCircleMarkers(
+    data = docks_chi,
+    radius = 1,
+    color = "blue",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Bikeshare Docks"
+  ) %>%
+  
+  # Train stations
+  leaflet::addCircleMarkers(
+    data = stations_chi,
+    radius = 1,
+    color = "red",
+    fill = TRUE,
+    fillOpacity = 0.5,
+    group = "Train Stations"
+  ) %>%
+  
+  # Layer controls
+  leaflet::addLayersControl(
+    overlayGroups = c("Population Density", "Bikeshare Docks", "Train Stations"),
+    options = leaflet::layersControlOptions(collapsed = FALSE)
+  )
+```
+
+:::
+
+## Univariate Testing
+
+::: {.panel-tabset}
+
+### Washington, DC
+
+```{r}
+coords <- st_coordinates(docks_dc)
+
+knn <- knearneigh(coords, k = 4)
+nb <- knn2nb(knn)
+
+lw <- nb2listw(nb, style = "W")
+
+inv_dist <- sapply(1:nrow(coords), function(i) {
+  neighbors <- nb[[i]]
+  if(length(neighbors) == 0) return(0)
+  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+})
+
+moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
+moran_result
+```
+
+```{r}
+dock_values <- inv_dist
+
+localI <- localmoran(dock_values, lw, zero.policy = TRUE)
+docks_dc$localI <- localI[,1]
+
+leaflet(docks_dc) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(
+    radius = 4,
+    color = ~viridis::viridis(20)[cut(localI, breaks = 20)],
+    fillOpacity = 0.8,
+    popup = ~paste0("Local Moran's I: ", round(localI, 3))
+  )
+```
+
+### New York, NY
+
+```{r}
+coords <- st_coordinates(docks_nyc)
+
+knn <- knearneigh(coords, k = 4)
+nb <- knn2nb(knn)
+
+lw <- nb2listw(nb, style = "W")
+
+inv_dist <- sapply(1:nrow(coords), function(i) {
+  neighbors <- nb[[i]]
+  if(length(neighbors) == 0) return(0)
+  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+})
+
+moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
+moran_result
+```
+
+### Boston, MA
+
+```{r}
+coords <- st_coordinates(docks_bos)
+
+knn <- knearneigh(coords, k = 4)
+nb <- knn2nb(knn)
+
+lw <- nb2listw(nb, style = "W")
+
+inv_dist <- sapply(1:nrow(coords), function(i) {
+  neighbors <- nb[[i]]
+  if(length(neighbors) == 0) return(0)
+  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+})
+
+moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
+moran_result
+```
+
+### San Francisco, CA
+
+```{r}
+coords <- st_coordinates(docks_sf)
+
+knn <- knearneigh(coords, k = 4)
+nb <- knn2nb(knn)
+
+lw <- nb2listw(nb, style = "W")
+
+inv_dist <- sapply(1:nrow(coords), function(i) {
+  neighbors <- nb[[i]]
+  if(length(neighbors) == 0) return(0)
+  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+})
+
+moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
+moran_result
+```
+
+### Chicago, IL
+
+```{r}
+coords <- st_coordinates(docks_chi)
+
+knn <- knearneigh(coords, k = 4)
+nb <- knn2nb(knn)
+
+lw <- nb2listw(nb, style = "W")
+
+inv_dist <- sapply(1:nrow(coords), function(i) {
+  neighbors <- nb[[i]]
+  if(length(neighbors) == 0) return(0)
+  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+})
+
+moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
+moran_result
+```
+
+:::
+
+### Results
+
+| Metropolitan Area | Moran's I Statistic |
+|-------------------|---------------------|
+| Washington, DC    | $0.8444759043$      |
+| New York, NY      | $0.6827748494$      |
+| Boston, MA        | $0.842640558$       |
+| San Francisco, CA | $0.808442476$       |
+| Chicago, IL       | $0.9584339511$      |
+
+## Hypothesis Test: Population Density
+
+::: {.panel-tabset}
+
+### Washington, DC
+
+```{r}
+proj_crs <- "EPSG:32618"
+docks_proj <- st_transform(docks_dc, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_dc, 32618)
+boundary_owin <- as.owin(boundary_proj)
+
+dock_coords <- st_coordinates(docks_proj)
+
+dock_ppp <- ppp(
+  x = dock_coords[,1],
+  y = dock_coords[,2],
+  window = boundary_owin
+)
+dc_bg_density_proj <- st_transform(dc_bg_density, 26918)
+rtemplate <- rast(
+  extent = ext(dc_bg_density_proj),
+  resolution = 250,
+  crs = crs(dc_bg_density)
+)
+
+pop_rast <- rasterize(
+  vect(dc_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot"
+)
+```
+
+```{r}
+dc_bg_density_proj <- st_transform(dc_bg_density, crs = proj_crs)
+
+rtemplate <- rast(
+  extent = ext(dc_bg_density_proj),
+  resolution = 250,
+  crs = "EPSG:32618"
+)
+
+pop_rast <- rasterize(
+  vect(dc_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot",
+  fun = "mean"
+)
+pop_rast <- mask(pop_rast, vect(boundary_proj))
+```
+
+```{r}
+nx <- ncol(pop_rast)
+ny <- nrow(pop_rast)
+r_ext <- ext(pop_rast)
+res_x <- res(pop_rast)[1]
+res_y <- res(pop_rast)[2]
+
+xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
+yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+
+vals <- values(pop_rast, mat = FALSE)
+mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+
+mat_oriented <- mat[ny:1, , drop = FALSE]
+pop_im <- im(mat_oriented, xcol, yrow)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ pop_im)
+summary(m1)
+anova(m0, m1, test="LR")
+```
+
+### New York, NY
+
+```{r}
+docks_proj <- st_transform(docks_nyc, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_nyc, 32618)
+boundary_owin <- as.owin(boundary_proj)
+
+dock_coords <- st_coordinates(docks_proj)
+
+dock_ppp <- ppp(
+  x = dock_coords[,1],
+  y = dock_coords[,2],
+  window = boundary_owin
+)
+nyc_bg_density_proj <- st_transform(nyc_bg_density, 26918)
+rtemplate <- rast(
+  extent = ext(nyc_bg_density_proj),
+  resolution = 250,
+  crs = crs(nyc_bg_density)
+)
+
+pop_rast <- rasterize(
+  vect(nyc_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot"
+)
+```
+
+```{r}
+nyc_bg_density_proj <- st_transform(nyc_bg_density, crs = proj_crs)
+
+rtemplate <- rast(
+  extent = ext(nyc_bg_density_proj),
+  resolution = 250,
+  crs = "EPSG:32618"
+)
+
+pop_rast <- rasterize(
+  vect(nyc_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot",
+  fun = "mean"
+)
+pop_rast <- mask(pop_rast, vect(boundary_proj))
+```
+
+```{r}
+nx <- ncol(pop_rast)
+ny <- nrow(pop_rast)
+r_ext <- ext(pop_rast)
+res_x <- res(pop_rast)[1]
+res_y <- res(pop_rast)[2]
+
+xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
+yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+
+vals <- values(pop_rast, mat = FALSE)
+mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+
+mat_oriented <- mat[ny:1, , drop = FALSE]
+pop_im <- im(mat_oriented, xcol, yrow)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ pop_im)
+summary(m1)
+anova(m0, m1, test="LR")
+```
+
+### Boston, MA
+
+```{r}
+docks_proj <- st_transform(docks_bos, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_bos, 32618)
+boundary_owin <- as.owin(boundary_proj)
+
+dock_coords <- st_coordinates(docks_proj)
+
+dock_ppp <- ppp(
+  x = dock_coords[,1],
+  y = dock_coords[,2],
+  window = boundary_owin
+)
+bos_bg_density_proj <- st_transform(bos_bg_density, 26918)
+rtemplate <- rast(
+  extent = ext(bos_bg_density_proj),
+  resolution = 250,
+  crs = crs(bos_bg_density)
+)
+
+pop_rast <- rasterize(
+  vect(bos_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot"
+)
+```
+
+```{r}
+bos_bg_density_proj <- st_transform(bos_bg_density, crs = proj_crs)
+
+rtemplate <- rast(
+  extent = ext(bos_bg_density_proj),
+  resolution = 250,
+  crs = "EPSG:32618"
+)
+
+pop_rast <- rasterize(
+  vect(bos_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot",
+  fun = "mean"
+)
+pop_rast <- mask(pop_rast, vect(boundary_proj))
+```
+
+```{r}
+nx <- ncol(pop_rast)
+ny <- nrow(pop_rast)
+r_ext <- ext(pop_rast)
+res_x <- res(pop_rast)[1]
+res_y <- res(pop_rast)[2]
+
+xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
+yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+
+vals <- values(pop_rast, mat = FALSE)
+mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+
+mat_oriented <- mat[ny:1, , drop = FALSE]
+pop_im <- im(mat_oriented, xcol, yrow)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ pop_im)
+summary(m1)
+anova(m0, m1, test="LR")
+```
+
+### San Francisco, CA
+
+```{r}
+docks_proj <- st_transform(docks_sf, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_sf, 32618)
+boundary_owin <- as.owin(boundary_proj)
+
+dock_coords <- st_coordinates(docks_proj)
+
+dock_ppp <- ppp(
+  x = dock_coords[,1],
+  y = dock_coords[,2],
+  window = boundary_owin
+)
+sf_bg_density_proj <- st_transform(sf_bg_density, 26918)
+rtemplate <- rast(
+  extent = ext(sf_bg_density_proj),
+  resolution = 250,
+  crs = crs(sf_bg_density)
+)
+
+pop_rast <- rasterize(
+  vect(sf_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot"
+)
+```
+
+```{r}
+sf_bg_density_proj <- st_transform(sf_bg_density, crs = proj_crs)
+
+rtemplate <- rast(
+  extent = ext(sf_bg_density_proj),
+  resolution = 250,
+  crs = "EPSG:32618"
+)
+
+pop_rast <- rasterize(
+  vect(sf_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot",
+  fun = "mean"
+)
+pop_rast <- mask(pop_rast, vect(boundary_proj))
+```
+
+```{r}
+nx <- ncol(pop_rast)
+ny <- nrow(pop_rast)
+r_ext <- ext(pop_rast)
+res_x <- res(pop_rast)[1]
+res_y <- res(pop_rast)[2]
+
+xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
+yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+
+vals <- values(pop_rast, mat = FALSE)
+mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+
+mat_oriented <- mat[ny:1, , drop = FALSE]
+pop_im <- im(mat_oriented, xcol, yrow)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ pop_im)
+summary(m1)
+anova(m0, m1, test="LR")
+```
+
+### Chicago, IL
+
+```{r}
+docks_proj <- st_transform(docks_chi, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_chi, 32618)
+boundary_owin <- as.owin(boundary_proj)
+
+dock_coords <- st_coordinates(docks_proj)
+
+dock_ppp <- ppp(
+  x = dock_coords[,1],
+  y = dock_coords[,2],
+  window = boundary_owin
+)
+chi_bg_density_proj <- st_transform(chi_bg_density, 26918)
+rtemplate <- rast(
+  extent = ext(chi_bg_density_proj),
+  resolution = 250,
+  crs = crs(chi_bg_density)
+)
+
+pop_rast <- rasterize(
+  vect(chi_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot"
+)
+```
+
+```{r}
+chi_bg_density_proj <- st_transform(chi_bg_density, crs = proj_crs)
+
+rtemplate <- rast(
+  extent = ext(chi_bg_density_proj),
+  resolution = 250,
+  crs = "EPSG:32618"
+)
+
+pop_rast <- rasterize(
+  vect(chi_bg_density_proj),
+  rtemplate,
+  field = "pop_density_plot",
+  fun = "mean"
+)
+pop_rast <- mask(pop_rast, vect(boundary_proj))
+```
+
+```{r}
+nx <- ncol(pop_rast)
+ny <- nrow(pop_rast)
+r_ext <- ext(pop_rast)
+res_x <- res(pop_rast)[1]
+res_y <- res(pop_rast)[2]
+
+xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
+yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+
+vals <- values(pop_rast, mat = FALSE)
+mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+
+mat_oriented <- mat[ny:1, , drop = FALSE]
+pop_im <- im(mat_oriented, xcol, yrow)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ pop_im)
+summary(m1)
+anova(m0, m1, test="LR")
+```
+
+:::
+
+### Results
+
+| City | Docks | Dock Intensity (points/unit squared) | `pop_im` coefficient | Z-value | Deviance diff |
+|------------|------------|------------|------------|------------|------------|
+| Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $1.913 \times 10^{-4}$ | $33.74$ | $683.18$ |
+| New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $2.121 \times 10^-5$ | $22.44$ | $436.56$ |
+| Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $9.189 \times 10^{-5}$ | $11.41$ | $105.4$ |
+| San Francisco, CA | $107$ | $6.35 \times 10^{-6}$ | $3.904 \times 10^{-5}$ | $2.60$ | $6.436$ |
+| Chicago, IL | $909$ | $3.77 \times 10^{-6}$ | $9.194 \times 10^{-5}$ | $19.56$ | $269.89$ |
+
+## Hypothesis Test: Other Transit options
+
+::: {.panel-tabset}
+
+### Washington, DC
+
+```{r}
+stations_proj <- st_transform(stations_dc, 32618)
+docks_proj <- st_transform(docks_dc, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_dc, 32618)
+
+boundary_owin <- as.owin(boundary_proj)
+dock_coords <- st_coordinates(docks_proj)
+dock_ppp <- ppp(x = dock_coords[,1],
+                y = dock_coords[,2],
+                window = boundary_owin)
+
+station_coords <- st_coordinates(stations_proj)
+station_ppp <- ppp(x = station_coords[,1],
+                   y = station_coords[,2],
+                   window = boundary_owin)
+
+dist_im <- distmap(station_ppp)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ dist_im)
+
+anova(m0, m1, test = "LR")
+summary(m1)
+```
+
+### New York, NY
+
+```{r}
+stations_proj <- st_transform(stations_nyc, 32618)
+docks_proj <- st_transform(docks_nyc, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_nyc, 32618)
+
+boundary_owin <- as.owin(boundary_proj)
+dock_coords <- st_coordinates(docks_proj)
+dock_ppp <- ppp(x = dock_coords[,1],
+                y = dock_coords[,2],
+                window = boundary_owin)
+
+station_coords <- st_coordinates(stations_proj)
+station_ppp <- ppp(x = station_coords[,1],
+                   y = station_coords[,2],
+                   window = boundary_owin)
+
+dist_im <- distmap(station_ppp)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ dist_im)
+
+anova(m0, m1, test = "LR")
+summary(m1)
+```
+
+### Boston, MA
+
+```{r}
+stations_proj <- st_transform(stations_bos, 32618)
+docks_proj <- st_transform(docks_bos, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_bos, 32618)
+
+boundary_owin <- as.owin(boundary_proj)
+dock_coords <- st_coordinates(docks_proj)
+dock_ppp <- ppp(x = dock_coords[,1],
+                y = dock_coords[,2],
+                window = boundary_owin)
+
+station_coords <- st_coordinates(stations_proj)
+station_ppp <- ppp(x = station_coords[,1],
+                   y = station_coords[,2],
+                   window = boundary_owin)
+
+dist_im <- distmap(station_ppp)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ dist_im)
+
+anova(m0, m1, test = "LR")
+summary(m1)
+```
+
+### San Francisco, CA
+
+```{r}
+stations_proj <- st_transform(stations_sf, 32618)
+docks_proj <- st_transform(docks_sf, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_sf, 32618)
+
+boundary_owin <- as.owin(boundary_proj)
+dock_coords <- st_coordinates(docks_proj)
+dock_ppp <- ppp(x = dock_coords[,1],
+                y = dock_coords[,2],
+                window = boundary_owin)
+
+station_coords <- st_coordinates(stations_proj)
+station_ppp <- ppp(x = station_coords[,1],
+                   y = station_coords[,2],
+                   window = boundary_owin)
+
+dist_im <- distmap(station_ppp)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ dist_im)
+
+anova(m0, m1, test = "LR")
+summary(m1)
+```
+
+### Chicago, IL
+
+```{r}
+stations_proj <- st_transform(stations_chi, 32618)
+docks_proj <- st_transform(docks_chi, 32618)
+boundary_proj <- st_transform(hull_buffered_wgs84_chi, 32618)
+
+boundary_owin <- as.owin(boundary_proj)
+dock_coords <- st_coordinates(docks_proj)
+dock_ppp <- ppp(x = dock_coords[,1],
+                y = dock_coords[,2],
+                window = boundary_owin)
+
+station_coords <- st_coordinates(stations_proj)
+station_ppp <- ppp(x = station_coords[,1],
+                   y = station_coords[,2],
+                   window = boundary_owin)
+
+dist_im <- distmap(station_ppp)
+```
+
+```{r}
+m0 <- ppm(dock_ppp ~ 1)
+m1 <- ppm(dock_ppp ~ dist_im)
+
+anova(m0, m1, test = "LR")
+summary(m1)
+```
+
+:::
+
+### Results
+
+| City | Docks | Dock Intensity (points/unit squared) | `dist_im` coefficient | Z-value | Deviance diff |
+|---------------|------------|------------|------------|------------|------------|
+| Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $-1.09 \times 10^{-3}$ | $-23.96$ | $1112.3$ |
+| New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $-1.61 \times 10^{-3}$ | $-25.90$ | $1174.6$ |
+| Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $-1.46 \times 10^{-3}$ | $-12.29$ | $263.95$ |
+| San Francisco, CA | $107$ | $8.44 \times 10^{-7}$ | $-2.97 \times 10^{-04}$ | $-2.83$ | $9.655$ |
+| Chicago, IL | $909$ | $3.77 \times 10^{-6}$ | $-8.24 \times 10^{-4}$ | $-17.02$ | $386.02$ |
