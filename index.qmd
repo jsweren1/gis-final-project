@@ -40,7 +40,43 @@ library(tidycensus)
 library(leaflet)
 ```
 
-## Plotting the Docks
+## Introduction
+
+Over the last decade, bikeshare systems have become increasingly prevalent in cities around the world in recent years, offering residents and visitors a convenient, low-cost, and environmentally friendly transportation option. However, the spatial deployment of these systems has significant implications over which communities benefit the most and the extent to which they can be of service. This project will analyze the geographic distribution of micromobility stations in several metropolitan areas and evaluate how access to these low-cost transportation options varies across neighborhoods.
+
+As of October 2025, there are five metropolitan areas in the U.S. whose docked bikeshare ridership far exceeds the rest: New York City, Boston, San Francisco, Chicago, and Washington, DC. These cities’ bikeshare systems each boast consistent monthly ridership of over 400,000, while the sixth-place city registers under 100,000. Thus, this project will focus on five cities with proven commitment to developing a system with geographic breadth. Unsurprisingly, these cities also have existing robust public transit networks, so this project will not only look at spatial deployment in relation to population, but also in relation to existing amenities for certain residents. Using OpenStreetMap data to locate bikeshare docks and other transit hubs, along with U.S. Census data to map population density, we will compare how bikeshare has been spatially deployed in its most prominent cases.
+
+## Literature Review
+
+## Methodology
+
+Each city will be analyzed via the following sets of hypotheses:
+
+1.  Docks in relation to population density:
+
+    -   **Null** **hypothesis**: There is no relationship between the spatial distribution of bikeshare docks and population density. Dock locations occur independently of areas with higher or lower population density.
+
+    <!-- -->
+
+    -   **Alternative** **hypothesis**: There is a relationship between the spatial distribution of Capital Bikeshare docks and population density. Dock locations are more likely to occur in areas with higher population density.
+
+2.  Docks in relation to other public transit options:
+
+    -   **Null hypothesis**: There is no relationship between the spatial distribution of bikeshare docks and the presence of other public transit nodes.
+
+    -   **Alternative hypothesis:** There is a relationship between the spatial distribution of bikeshare docks and the presence of other public transit nodes. Dock locations are more likely to be placed in areas with existing public transit infrastructure.
+
+The first steps towards testing these hypotheses will be to gather bikeshare dock and train station locations from OpenStreetMap via the `osm` package in R and population density data from the U.S. Census via the `tidycensus` package. To create a geographic region for each city, we will create a concave hull around all of the bikeshare docks. Since metropolitan areas differ in the distance from the city's center that bikeshare systems reach, this will allow us to only consider areas within the chosen scope of each system, and how docks have been deployed within those limitations.
+
+The following information will then be gathered to test the hypotheses:
+
+-   Moran's I to generally understand clustering of bike docks.
+
+-   Regression testing results to analyze the relationship between dock locations, population density, and public transit options.
+
+-   Monte Carlo simulations to compare actual results to randomized data.
+
+## Exploratory Data Analysis
 
 ::: panel-tabset
 ### Washington, DC
@@ -61,7 +97,7 @@ docks_dc <- docks_raw_dc$osm_points |>
 ```{r}
 hull_dc <- docks_dc |> 
     st_union() |> 
-    st_convex_hull()
+    st_concave_hull(.2)
 hull_buffered_dc <- st_buffer(hull_dc, dist = 2500)
 hull_buffered_wgs84_dc <- st_transform(hull_buffered_dc, 4326)
 docks_dc <- st_intersection(
@@ -92,7 +128,7 @@ docks_nyc <- docks_raw_nyc$osm_points |>
 ```{r}
 hull_nyc <- docks_nyc |> 
   st_union() |> 
-  st_convex_hull()
+  st_concave_hull(.2)
 hull_buffered_nyc <- st_buffer(hull_nyc, dist = 500)
 hull_buffered_wgs84_nyc <- st_transform(hull_buffered_nyc, 4326)
 docks_nyc <- st_intersection(
@@ -124,8 +160,8 @@ docks_bos <- docks_raw_bos$osm_points |>
 ```{r}
 hull_bos <- docks_bos |> 
   st_union() |> 
-  st_convex_hull()
-hull_buffered_bos <- st_buffer(hull_bos, dist = 2500)
+  st_concave_hull(.2)
+hull_buffered_bos <- st_buffer(hull_bos, dist = 1000)
 hull_buffered_wgs84_bos <- st_transform(hull_buffered_bos, 4326)
 docks_bos <- st_intersection(
   st_transform(docks_bos, 4326),
@@ -156,8 +192,8 @@ docks_sf <- docks_raw_sf$osm_points |>
 ```{r}
 hull_sf <- docks_sf |> 
   st_union() |> 
-  st_convex_hull()
-hull_buffered_sf <- st_buffer(hull_sf, dist = 500)
+  st_concave_hull(.2)
+hull_buffered_sf <- st_buffer(hull_sf, dist = 1000)
 hull_buffered_wgs84_sf <- st_transform(hull_buffered_sf, 4326)
 docks_sf <- st_intersection(
   st_transform(docks_sf, 4326),
@@ -188,7 +224,7 @@ docks_chi <- docks_raw_chi$osm_points |>
 ```{r}
 hull_chi <- docks_chi |> 
   st_union() |> 
-  st_convex_hull()
+  st_concave_hull(.2)
 hull_buffered_chi <- st_buffer(hull_chi, dist = 2500)
 hull_buffered_wgs84_chi <- st_transform(hull_buffered_chi, 4326)
 docks_chi <- st_intersection(
@@ -544,7 +580,7 @@ sf_bg_density <- sf_bg_clipped %>%
 ```
 
 ```{r}
-max_density <- 25000
+max_density <- 35000
 sf_bg_density$pop_density_plot <- pmin(sf_bg_density$pop_density, max_density)
 ```
 
@@ -767,6 +803,22 @@ moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
 moran_result
 ```
 
+```{r}
+dock_values <- inv_dist
+
+localI <- localmoran(dock_values, lw, zero.policy = TRUE)
+docks_nyc$localI <- localI[,1]
+
+leaflet(docks_nyc) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(
+    radius = 4,
+    color = ~viridis::viridis(20)[cut(localI, breaks = 20)],
+    fillOpacity = 0.8,
+    popup = ~paste0("Local Moran's I: ", round(localI, 3))
+  )
+```
+
 ### Boston, MA
 
 ```{r}
@@ -785,6 +837,22 @@ inv_dist <- sapply(1:nrow(coords), function(i) {
 
 moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
 moran_result
+```
+
+```{r}
+dock_values <- inv_dist
+
+localI <- localmoran(dock_values, lw, zero.policy = TRUE)
+docks_bos$localI <- localI[,1]
+
+leaflet(docks_bos) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(
+    radius = 4,
+    color = ~viridis::viridis(20)[cut(localI, breaks = 20)],
+    fillOpacity = 0.8,
+    popup = ~paste0("Local Moran's I: ", round(localI, 3))
+  )
 ```
 
 ### San Francisco, CA
@@ -807,6 +875,22 @@ moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
 moran_result
 ```
 
+```{r}
+dock_values <- inv_dist
+
+localI <- localmoran(dock_values, lw, zero.policy = TRUE)
+docks_sf$localI <- localI[,1]
+
+leaflet(docks_sf) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(
+    radius = 4,
+    color = ~viridis::viridis(20)[cut(localI, breaks = 20)],
+    fillOpacity = 0.8,
+    popup = ~paste0("Local Moran's I: ", round(localI, 3))
+  )
+```
+
 ### Chicago, IL
 
 ```{r}
@@ -826,9 +910,25 @@ inv_dist <- sapply(1:nrow(coords), function(i) {
 moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
 moran_result
 ```
+
+```{r}
+dock_values <- inv_dist
+
+localI <- localmoran(dock_values, lw, zero.policy = TRUE)
+docks_chi$localI <- localI[,1]
+
+leaflet(docks_chi) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addCircleMarkers(
+    radius = 4,
+    color = ~viridis::viridis(20)[cut(localI, breaks = 20)],
+    fillOpacity = 0.8,
+    popup = ~paste0("Local Moran's I: ", round(localI, 3))
+  )
+```
 :::
 
-### Results
+### Univariate Results
 
 | Metropolitan Area | Moran's I Statistic |
 |-------------------|---------------------|
@@ -840,524 +940,888 @@ moran_result
 
 ## Hypothesis Test: Population Density
 
+### Correlation Functions
+
 ::: panel-tabset
 ### Washington, DC
 
 ```{r}
 proj_crs <- "EPSG:32618"
-docks_proj <- st_transform(docks_dc, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_dc, 32618)
-boundary_owin <- as.owin(boundary_proj)
+docks_proj_dc <- st_transform(docks_dc, 32618)
+boundary_proj_dc <- st_transform(hull_buffered_wgs84_dc, 32618)
+boundary_owin_dc <- as.owin(boundary_proj_dc)
 
-dock_coords <- st_coordinates(docks_proj)
+dock_coords_dc <- st_coordinates(docks_proj_dc)
 
-dock_ppp <- ppp(
-  x = dock_coords[,1],
-  y = dock_coords[,2],
-  window = boundary_owin
+dock_ppp_dc <- ppp(
+  x = dock_coords_dc[,1],
+  y = dock_coords_dc[,2],
+  window = boundary_owin_dc
 )
-dc_bg_density_proj <- st_transform(dc_bg_density, 26918)
-rtemplate <- rast(
-  extent = ext(dc_bg_density_proj),
-  resolution = 250,
-  crs = crs(dc_bg_density)
-)
-
-pop_rast <- rasterize(
-  vect(dc_bg_density_proj),
-  rtemplate,
-  field = "pop_density_plot"
-)
-```
-
-```{r}
-dc_bg_density_proj <- st_transform(dc_bg_density, crs = proj_crs)
-
-rtemplate <- rast(
+dc_bg_density_proj <- st_transform(dc_bg_density, proj_crs)
+rtemplate_dc <- rast(
   extent = ext(dc_bg_density_proj),
   resolution = 250,
   crs = "EPSG:32618"
 )
 
-pop_rast <- rasterize(
+pop_rast_dc <- rasterize(
   vect(dc_bg_density_proj),
-  rtemplate,
+  rtemplate_dc,
   field = "pop_density_plot",
   fun = "mean"
 )
-pop_rast <- mask(pop_rast, vect(boundary_proj))
+
+pop_rast_dc <- mask(pop_rast_dc, vect(boundary_proj_dc))
 ```
 
 ```{r}
-nx <- ncol(pop_rast)
-ny <- nrow(pop_rast)
-r_ext <- ext(pop_rast)
-res_x <- res(pop_rast)[1]
-res_y <- res(pop_rast)[2]
+nx_dc <- ncol(pop_rast_dc)
+ny_dc <- nrow(pop_rast_dc)
+r_ext_dc <- ext(pop_rast_dc)
+res_x_dc <- res(pop_rast_dc)[1]
+res_y_dc <- res(pop_rast_dc)[2]
 
-xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
-yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+xcol_dc <- seq(r_ext_dc$xmin + res_x_dc/2, r_ext_dc$xmax - res_x_dc/2, length.out = nx_dc)
+yrow_dc <- seq(r_ext_dc$ymin + res_y_dc/2, r_ext_dc$ymax - res_y_dc/2, length.out = ny_dc)
 
-vals <- values(pop_rast, mat = FALSE)
-mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+vals_dc <- values(pop_rast_dc, mat = FALSE)
+mat_dc <- matrix(vals_dc, nrow = ny_dc, ncol = nx_dc, byrow = TRUE)
 
-mat_oriented <- mat[ny:1, , drop = FALSE]
-pop_im <- im(mat_oriented, xcol, yrow)
+mat_oriented_dc <- mat_dc[ny_dc:1, , drop = FALSE]
+pop_im_dc <- im(mat_oriented_dc, xcol_dc, yrow_dc)
 ```
 
 ```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ pop_im)
-summary(m1)
-anova(m0, m1, test="LR")
+m0_dc <- ppm(dock_ppp_dc ~ 1)
+m1_dc <- ppm(dock_ppp_dc ~ pop_im_dc)
+summary(m1_dc)
+anova(m0_dc, m1_dc, test="LR")
 ```
 
 ### New York, NY
 
 ```{r}
-docks_proj <- st_transform(docks_nyc, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_nyc, 32618)
-boundary_owin <- as.owin(boundary_proj)
+docks_proj_nyc <- st_transform(docks_nyc, 32618)
+boundary_proj_nyc <- st_transform(hull_buffered_wgs84_nyc, 32618)
+boundary_owin_nyc <- as.owin(boundary_proj_nyc)
 
-dock_coords <- st_coordinates(docks_proj)
+dock_coords_nyc <- st_coordinates(docks_proj_nyc)
 
-dock_ppp <- ppp(
-  x = dock_coords[,1],
-  y = dock_coords[,2],
-  window = boundary_owin
+dock_ppp_nyc <- ppp(
+  x = dock_coords_nyc[,1],
+  y = dock_coords_nyc[,2],
+  window = boundary_owin_nyc
 )
-nyc_bg_density_proj <- st_transform(nyc_bg_density, 26918)
-rtemplate <- rast(
-  extent = ext(nyc_bg_density_proj),
-  resolution = 250,
-  crs = crs(nyc_bg_density)
-)
-
-pop_rast <- rasterize(
-  vect(nyc_bg_density_proj),
-  rtemplate,
-  field = "pop_density_plot"
-)
-```
-
-```{r}
 nyc_bg_density_proj <- st_transform(nyc_bg_density, crs = proj_crs)
 
-rtemplate <- rast(
+rtemplate_nyc <- rast(
   extent = ext(nyc_bg_density_proj),
   resolution = 250,
   crs = "EPSG:32618"
 )
 
-pop_rast <- rasterize(
+pop_rast_nyc <- rasterize(
   vect(nyc_bg_density_proj),
-  rtemplate,
+  rtemplate_nyc,
   field = "pop_density_plot",
   fun = "mean"
 )
-pop_rast <- mask(pop_rast, vect(boundary_proj))
+pop_rast_nyc <- mask(pop_rast_nyc, vect(boundary_proj_nyc))
 ```
 
 ```{r}
-nx <- ncol(pop_rast)
-ny <- nrow(pop_rast)
-r_ext <- ext(pop_rast)
-res_x <- res(pop_rast)[1]
-res_y <- res(pop_rast)[2]
+nx_nyc <- ncol(pop_rast_nyc)
+ny_nyc <- nrow(pop_rast_nyc)
+r_ext_nyc <- ext(pop_rast_nyc)
+res_x_nyc <- res(pop_rast_nyc)[1]
+res_y_nyc <- res(pop_rast_nyc)[2]
 
-xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
-yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+xcol_nyc <- seq(r_ext_nyc$xmin + res_x_nyc/2, r_ext_nyc$xmax - res_x_nyc/2, length.out = nx_nyc)
+yrow_nyc <- seq(r_ext_nyc$ymin + res_y_nyc/2, r_ext_nyc$ymax - res_y_nyc/2, length.out = ny_nyc)
 
-vals <- values(pop_rast, mat = FALSE)
-mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+vals_nyc <- values(pop_rast_nyc, mat = FALSE)
+mat_nyc <- matrix(vals_nyc, nrow = ny_nyc, ncol = nx_nyc, byrow = TRUE)
 
-mat_oriented <- mat[ny:1, , drop = FALSE]
-pop_im <- im(mat_oriented, xcol, yrow)
+mat_oriented_nyc <- mat_nyc[ny_nyc:1, , drop = FALSE]
+pop_im_nyc <- im(mat_oriented_nyc, xcol_nyc, yrow_nyc)
 ```
 
 ```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ pop_im)
-summary(m1)
-anova(m0, m1, test="LR")
+m0_nyc <- ppm(dock_ppp_nyc ~ 1)
+m1_nyc <- ppm(dock_ppp_nyc ~ pop_im_nyc)
+summary(m1_nyc)
+anova(m0_nyc, m1_nyc, test="LR")
 ```
 
 ### Boston, MA
 
 ```{r}
-docks_proj <- st_transform(docks_bos, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_bos, 32618)
-boundary_owin <- as.owin(boundary_proj)
+docks_proj_bos <- st_transform(docks_bos, 32618)
+boundary_proj_bos <- st_transform(hull_buffered_wgs84_bos, 32618)
+boundary_owin_bos <- as.owin(boundary_proj_bos)
 
-dock_coords <- st_coordinates(docks_proj)
+dock_coords_bos <- st_coordinates(docks_proj_bos)
 
-dock_ppp <- ppp(
-  x = dock_coords[,1],
-  y = dock_coords[,2],
-  window = boundary_owin
+dock_ppp_bos <- ppp(
+  x = dock_coords_bos[,1],
+  y = dock_coords_bos[,2],
+  window = boundary_owin_bos
 )
-bos_bg_density_proj <- st_transform(bos_bg_density, 26918)
-rtemplate <- rast(
-  extent = ext(bos_bg_density_proj),
-  resolution = 250,
-  crs = crs(bos_bg_density)
-)
-
-pop_rast <- rasterize(
-  vect(bos_bg_density_proj),
-  rtemplate,
-  field = "pop_density_plot"
-)
-```
-
-```{r}
 bos_bg_density_proj <- st_transform(bos_bg_density, crs = proj_crs)
 
-rtemplate <- rast(
+rtemplate_bos <- rast(
   extent = ext(bos_bg_density_proj),
   resolution = 250,
   crs = "EPSG:32618"
 )
 
-pop_rast <- rasterize(
+pop_rast_bos <- rasterize(
   vect(bos_bg_density_proj),
-  rtemplate,
+  rtemplate_bos,
   field = "pop_density_plot",
   fun = "mean"
 )
-pop_rast <- mask(pop_rast, vect(boundary_proj))
+pop_rast_bos <- mask(pop_rast_bos, vect(boundary_proj_bos))
 ```
 
 ```{r}
-nx <- ncol(pop_rast)
-ny <- nrow(pop_rast)
-r_ext <- ext(pop_rast)
-res_x <- res(pop_rast)[1]
-res_y <- res(pop_rast)[2]
+nx_bos <- ncol(pop_rast_bos)
+ny_bos <- nrow(pop_rast_bos)
+r_ext_bos <- ext(pop_rast_bos)
+res_x_bos <- res(pop_rast_bos)[1]
+res_y_bos <- res(pop_rast_bos)[2]
 
-xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
-yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+xcol_bos <- seq(r_ext_bos$xmin + res_x_bos/2, r_ext_bos$xmax - res_x_bos/2, length.out = nx_bos)
+yrow_bos <- seq(r_ext_bos$ymin + res_y_bos/2, r_ext_bos$ymax - res_y_bos/2, length.out = ny_bos)
 
-vals <- values(pop_rast, mat = FALSE)
-mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+vals_bos <- values(pop_rast_bos, mat = FALSE)
+mat_bos <- matrix(vals_bos, nrow = ny_bos, ncol = nx_bos, byrow = TRUE)
 
-mat_oriented <- mat[ny:1, , drop = FALSE]
-pop_im <- im(mat_oriented, xcol, yrow)
+mat_oriented_bos <- mat_bos[ny_bos:1, , drop = FALSE]
+pop_im_bos <- im(mat_oriented_bos, xcol_bos, yrow_bos)
 ```
 
 ```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ pop_im)
-summary(m1)
-anova(m0, m1, test="LR")
+m0_bos <- ppm(dock_ppp_bos ~ 1)
+m1_bos <- ppm(dock_ppp_bos ~ pop_im_bos)
+summary(m1_bos)
+anova(m0_bos, m1_bos, test="LR")
 ```
 
 ### San Francisco, CA
 
 ```{r}
-docks_proj <- st_transform(docks_sf, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_sf, 32618)
-boundary_owin <- as.owin(boundary_proj)
+docks_proj_sf <- st_transform(docks_sf, 32618)
+boundary_proj_sf <- st_transform(hull_buffered_wgs84_sf, 32618)
+boundary_owin_sf <- as.owin(boundary_proj_sf)
 
-dock_coords <- st_coordinates(docks_proj)
+dock_coords_sf <- st_coordinates(docks_proj_sf)
 
-dock_ppp <- ppp(
-  x = dock_coords[,1],
-  y = dock_coords[,2],
-  window = boundary_owin
+dock_ppp_sf <- ppp(
+  x = dock_coords_sf[,1],
+  y = dock_coords_sf[,2],
+  window = boundary_owin_sf
 )
-sf_bg_density_proj <- st_transform(sf_bg_density, 26918)
-rtemplate <- rast(
-  extent = ext(sf_bg_density_proj),
-  resolution = 250,
-  crs = crs(sf_bg_density)
-)
-
-pop_rast <- rasterize(
-  vect(sf_bg_density_proj),
-  rtemplate,
-  field = "pop_density_plot"
-)
-```
-
-```{r}
 sf_bg_density_proj <- st_transform(sf_bg_density, crs = proj_crs)
 
-rtemplate <- rast(
+rtemplate_sf <- rast(
   extent = ext(sf_bg_density_proj),
   resolution = 250,
   crs = "EPSG:32618"
 )
 
-pop_rast <- rasterize(
+pop_rast_sf <- rasterize(
   vect(sf_bg_density_proj),
-  rtemplate,
+  rtemplate_sf,
   field = "pop_density_plot",
   fun = "mean"
 )
-pop_rast <- mask(pop_rast, vect(boundary_proj))
+pop_rast_sf <- mask(pop_rast_sf, vect(boundary_proj_sf))
 ```
 
 ```{r}
-nx <- ncol(pop_rast)
-ny <- nrow(pop_rast)
-r_ext <- ext(pop_rast)
-res_x <- res(pop_rast)[1]
-res_y <- res(pop_rast)[2]
+nx_sf <- ncol(pop_rast_sf)
+ny_sf <- nrow(pop_rast_sf)
+r_ext_sf <- ext(pop_rast_sf)
+res_x_sf <- res(pop_rast_sf)[1]
+res_y_sf <- res(pop_rast_sf)[2]
 
-xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
-yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+xcol_sf <- seq(r_ext_sf$xmin + res_x_sf/2, r_ext_sf$xmax - res_x_sf/2, length.out = nx_sf)
+yrow_sf <- seq(r_ext_sf$ymin + res_y_sf/2, r_ext_sf$ymax - res_y_sf/2, length.out = ny_sf)
 
-vals <- values(pop_rast, mat = FALSE)
-mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+vals_sf <- values(pop_rast_sf, mat = FALSE)
+mat_sf <- matrix(vals_sf, nrow = ny_sf, ncol = nx_sf, byrow = TRUE)
 
-mat_oriented <- mat[ny:1, , drop = FALSE]
-pop_im <- im(mat_oriented, xcol, yrow)
+mat_oriented_sf <- mat_sf[ny_sf:1, , drop = FALSE]
+pop_im_sf <- im(mat_oriented_sf, xcol_sf, yrow_sf)
 ```
 
 ```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ pop_im)
-summary(m1)
-anova(m0, m1, test="LR")
+m0_sf <- ppm(dock_ppp_sf ~ 1)
+m1_sf <- ppm(dock_ppp_sf ~ pop_im_sf)
+summary(m1_sf)
+anova(m0_sf, m1_sf, test="LR")
 ```
 
 ### Chicago, IL
 
 ```{r}
-docks_proj <- st_transform(docks_chi, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_chi, 32618)
-boundary_owin <- as.owin(boundary_proj)
+docks_proj_chi <- st_transform(docks_chi, 32618)
+boundary_proj_chi <- st_transform(hull_buffered_wgs84_chi, 32618)
+boundary_owin_chi <- as.owin(boundary_proj_chi)
 
-dock_coords <- st_coordinates(docks_proj)
+dock_coords_chi <- st_coordinates(docks_proj_chi)
 
-dock_ppp <- ppp(
-  x = dock_coords[,1],
-  y = dock_coords[,2],
-  window = boundary_owin
+dock_ppp_chi <- ppp(
+  x = dock_coords_chi[,1],
+  y = dock_coords_chi[,2],
+  window = boundary_owin_chi
 )
-chi_bg_density_proj <- st_transform(chi_bg_density, 26918)
-rtemplate <- rast(
-  extent = ext(chi_bg_density_proj),
-  resolution = 250,
-  crs = crs(chi_bg_density)
-)
-
-pop_rast <- rasterize(
-  vect(chi_bg_density_proj),
-  rtemplate,
-  field = "pop_density_plot"
-)
-```
-
-```{r}
 chi_bg_density_proj <- st_transform(chi_bg_density, crs = proj_crs)
 
-rtemplate <- rast(
+rtemplate_chi <- rast(
   extent = ext(chi_bg_density_proj),
   resolution = 250,
   crs = "EPSG:32618"
 )
 
-pop_rast <- rasterize(
+pop_rast_chi <- rasterize(
   vect(chi_bg_density_proj),
-  rtemplate,
+  rtemplate_chi,
   field = "pop_density_plot",
   fun = "mean"
 )
-pop_rast <- mask(pop_rast, vect(boundary_proj))
+pop_rast_chi <- mask(pop_rast_chi, vect(boundary_proj_chi))
 ```
 
 ```{r}
-nx <- ncol(pop_rast)
-ny <- nrow(pop_rast)
-r_ext <- ext(pop_rast)
-res_x <- res(pop_rast)[1]
-res_y <- res(pop_rast)[2]
+nx_chi <- ncol(pop_rast_chi)
+ny_chi <- nrow(pop_rast_chi)
+r_ext_chi <- ext(pop_rast_chi)
+res_x_chi <- res(pop_rast_chi)[1]
+res_y_chi <- res(pop_rast_chi)[2]
 
-xcol <- seq(r_ext$xmin + res_x/2, r_ext$xmax - res_x/2, length.out = nx)
-yrow <- seq(r_ext$ymin + res_y/2, r_ext$ymax - res_y/2, length.out = ny)
+xcol_chi <- seq(r_ext_chi$xmin + res_x_chi/2, r_ext_chi$xmax - res_x_chi/2, length.out = nx_chi)
+yrow_chi <- seq(r_ext_chi$ymin + res_y_chi/2, r_ext_chi$ymax - res_y_chi/2, length.out = ny_chi)
 
-vals <- values(pop_rast, mat = FALSE)
-mat <- matrix(vals, nrow = ny, ncol = nx, byrow = TRUE)
+vals_chi <- values(pop_rast_chi, mat = FALSE)
+mat_chi <- matrix(vals_chi, nrow = ny_chi, ncol = nx_chi, byrow = TRUE)
 
-mat_oriented <- mat[ny:1, , drop = FALSE]
-pop_im <- im(mat_oriented, xcol, yrow)
+mat_oriented_chi <- mat_chi[ny_chi:1, , drop = FALSE]
+pop_im_chi <- im(mat_oriented_chi, xcol_chi, yrow_chi)
 ```
 
 ```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ pop_im)
-summary(m1)
-anova(m0, m1, test="LR")
+m0_chi <- ppm(dock_ppp_chi ~ 1)
+m1_chi <- ppm(dock_ppp_chi ~ pop_im_chi)
+summary(m1_chi)
+anova(m0_chi, m1_chi, test="LR")
 ```
 :::
 
-### Results
+### Correlation Function Results against Population Density
 
-| City | Docks | Dock Intensity (points/unit squared) | `pop_im` coefficient | Z-value | Deviance diff |
-|-----------|------|-------------------|------------|-------|---------|
+| Metropolitan Area | Docks | Dock Intensity (points/unit squared) | `pop_im` coefficient | Z-value | Deviance diff |
+|------------|------------|------------|------------|------------|------------|
 | Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $1.913 \times 10^{-4}$ | $33.74$ | $683.18$ |
 | New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $2.121 \times 10^-5$ | $22.44$ | $436.56$ |
 | Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $9.189 \times 10^{-5}$ | $11.41$ | $105.4$ |
 | San Francisco, CA | $107$ | $6.35 \times 10^{-6}$ | $3.904 \times 10^{-5}$ | $2.60$ | $6.436$ |
 | Chicago, IL | $909$ | $3.77 \times 10^{-6}$ | $9.194 \times 10^{-5}$ | $19.56$ | $269.89$ |
 
-## Hypothesis Test: Other Transit options
+### Monte Carlo Simulations
 
 ::: panel-tabset
 ### Washington, DC
 
 ```{r}
-stations_proj <- st_transform(stations_dc, 32618)
-docks_proj <- st_transform(docks_dc, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_dc, 32618)
+model_obs_dc <- ppm(dock_ppp_dc ~ pop_im_dc)
+coef_obs_dc <- coef(model_obs_dc)["pop_im_dc"]
 
-boundary_owin <- as.owin(boundary_proj)
-dock_coords <- st_coordinates(docks_proj)
-dock_ppp <- ppp(x = dock_coords[,1],
-                y = dock_coords[,2],
-                window = boundary_owin)
+nsim <- 999
+coef_sim_dc <- numeric(nsim)
 
-station_coords <- st_coordinates(stations_proj)
-station_ppp <- ppp(x = station_coords[,1],
-                   y = station_coords[,2],
-                   window = boundary_owin)
+for (i in 1:nsim) {
+  sim_ppp_dc <- runifpoint(n = dock_ppp_dc$n, win = boundary_owin_dc)
+  sim_model_dc <- ppm(sim_ppp_dc ~ pop_im_dc)
+  coef_sim_dc[i] <- coef(sim_model_dc)["pop_im_dc"]
+}
 
-dist_im <- distmap(station_ppp)
-```
+p_value_dc <- (sum(coef_sim_dc >= coef_obs_dc) + 1) / (nsim + 1)
 
-```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ dist_im)
+hist(
+  coef_sim_dc,
+  main = "Washington, DC: Monte Carlo Distribution of pop_im Coefficients",
+  xlab = "Simulated pop_im Coefficient",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(min(coef_sim_dc, coef_obs_dc), max(coef_sim_dc, coef_obs_dc))
+)
+abline(v = coef_obs_dc, col = "red", lwd = 3)
 
-anova(m0, m1, test = "LR")
-summary(m1)
+p_value_dc <- (sum(coef_sim_dc >= coef_obs_dc) + 1) / (nsim + 1)
+p_value_dc
 ```
 
 ### New York, NY
 
 ```{r}
-stations_proj <- st_transform(stations_nyc, 32618)
-docks_proj <- st_transform(docks_nyc, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_nyc, 32618)
+model_obs_nyc <- ppm(dock_ppp_nyc ~ pop_im_nyc)
+coef_obs_nyc <- coef(model_obs_nyc)["pop_im_nyc"]
 
-boundary_owin <- as.owin(boundary_proj)
-dock_coords <- st_coordinates(docks_proj)
-dock_ppp <- ppp(x = dock_coords[,1],
-                y = dock_coords[,2],
-                window = boundary_owin)
+nsim <- 999
+coef_sim_nyc <- numeric(nsim)
 
-station_coords <- st_coordinates(stations_proj)
-station_ppp <- ppp(x = station_coords[,1],
-                   y = station_coords[,2],
-                   window = boundary_owin)
+for (i in 1:nsim) {
+  sim_ppp_nyc <- runifpoint(n = dock_ppp_nyc$n, win = boundary_owin_nyc)
+  sim_model_nyc <- ppm(sim_ppp_nyc ~ pop_im_nyc)
+  coef_sim_nyc[i] <- coef(sim_model_nyc)["pop_im_nyc"]
+}
 
-dist_im <- distmap(station_ppp)
-```
+p_value_nyc <- (sum(coef_sim_nyc >= coef_obs_nyc) + 1) / (nsim + 1)
 
-```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ dist_im)
+hist(
+  coef_sim_nyc,
+  main = "New York, NY: Monte Carlo Distribution of pop_im Coefficients",
+  xlab = "Simulated pop_im Coefficient",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(min(coef_sim_nyc, coef_obs_nyc), max(coef_sim_nyc, coef_obs_nyc))
+)
+abline(v = coef_obs_nyc, col = "red", lwd = 3)
 
-anova(m0, m1, test = "LR")
-summary(m1)
+p_value_nyc <- (sum(coef_sim_nyc >= coef_obs_nyc) + 1) / (nsim + 1)
+p_value_nyc
 ```
 
 ### Boston, MA
 
 ```{r}
-stations_proj <- st_transform(stations_bos, 32618)
-docks_proj <- st_transform(docks_bos, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_bos, 32618)
+model_obs_bos <- ppm(dock_ppp_bos ~ pop_im_bos)
+coef_obs_bos <- coef(model_obs_bos)["pop_im_bos"]
 
-boundary_owin <- as.owin(boundary_proj)
-dock_coords <- st_coordinates(docks_proj)
-dock_ppp <- ppp(x = dock_coords[,1],
-                y = dock_coords[,2],
-                window = boundary_owin)
+nsim <- 999
+coef_sim_bos <- numeric(nsim)
 
-station_coords <- st_coordinates(stations_proj)
-station_ppp <- ppp(x = station_coords[,1],
-                   y = station_coords[,2],
-                   window = boundary_owin)
+for (i in 1:nsim) {
+  sim_ppp_bos <- runifpoint(n = dock_ppp_bos$n, win = boundary_owin_bos)
+  sim_model_bos <- ppm(sim_ppp_bos ~ pop_im_bos)
+  coef_sim_bos[i] <- coef(sim_model_bos)["pop_im_bos"]
+}
 
-dist_im <- distmap(station_ppp)
-```
+p_value_bos <- (sum(coef_sim_bos >= coef_obs_bos) + 1) / (nsim + 1)
 
-```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ dist_im)
+hist(
+  coef_sim_bos,
+  main = "Boston, MA: Monte Carlo Distribution of pop_im Coefficients",
+  xlab = "Simulated pop_im Coefficient",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(min(coef_sim_bos, coef_obs_bos), max(coef_sim_bos, coef_obs_bos))
+)
+abline(v = coef_obs_bos, col = "red", lwd = 3)
 
-anova(m0, m1, test = "LR")
-summary(m1)
+p_value_bos <- (sum(coef_sim_bos >= coef_obs_bos) + 1) / (nsim + 1)
+p_value_bos
 ```
 
 ### San Francisco, CA
 
 ```{r}
-stations_proj <- st_transform(stations_sf, 32618)
-docks_proj <- st_transform(docks_sf, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_sf, 32618)
+model_obs_sf <- ppm(dock_ppp_sf ~ pop_im_sf)
+coef_obs_sf <- coef(model_obs_sf)["pop_im_sf"]
 
-boundary_owin <- as.owin(boundary_proj)
-dock_coords <- st_coordinates(docks_proj)
-dock_ppp <- ppp(x = dock_coords[,1],
-                y = dock_coords[,2],
-                window = boundary_owin)
+nsim <- 999
+coef_sim_sf <- numeric(nsim)
 
-station_coords <- st_coordinates(stations_proj)
-station_ppp <- ppp(x = station_coords[,1],
-                   y = station_coords[,2],
-                   window = boundary_owin)
+for (i in 1:nsim) {
+  sim_ppp_sf <- runifpoint(n = dock_ppp_sf$n, win = boundary_owin_sf)
+  sim_model_sf <- ppm(sim_ppp_sf ~ pop_im_sf)
+  coef_sim_sf[i] <- coef(sim_model_sf)["pop_im_sf"]
+}
 
-dist_im <- distmap(station_ppp)
-```
+p_value_sf <- (sum(coef_sim_sf >= coef_obs_sf) + 1) / (nsim + 1)
 
-```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ dist_im)
+hist(
+  coef_sim_sf,
+  main = "San Francisco, CA: Monte Carlo Distribution of pop_im Coefficients",
+  xlab = "Simulated pop_im Coefficient",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(min(coef_sim_sf, coef_obs_sf), max(coef_sim_sf, coef_obs_sf))
+)
+abline(v = coef_obs_sf, col = "red", lwd = 3)
 
-anova(m0, m1, test = "LR")
-summary(m1)
+p_value_sf <- (sum(coef_sim_sf >= coef_obs_sf) + 1) / (nsim + 1)
+p_value_sf
 ```
 
 ### Chicago, IL
 
 ```{r}
-stations_proj <- st_transform(stations_chi, 32618)
-docks_proj <- st_transform(docks_chi, 32618)
-boundary_proj <- st_transform(hull_buffered_wgs84_chi, 32618)
+model_obs_chi <- ppm(dock_ppp_chi ~ pop_im_chi)
+coef_obs_chi <- coef(model_obs_chi)["pop_im_chi"]
 
-boundary_owin <- as.owin(boundary_proj)
-dock_coords <- st_coordinates(docks_proj)
-dock_ppp <- ppp(x = dock_coords[,1],
-                y = dock_coords[,2],
-                window = boundary_owin)
+nsim <- 999
+coef_sim_chi <- numeric(nsim)
 
-station_coords <- st_coordinates(stations_proj)
-station_ppp <- ppp(x = station_coords[,1],
-                   y = station_coords[,2],
-                   window = boundary_owin)
+for (i in 1:nsim) {
+  sim_ppp_chi <- runifpoint(n = dock_ppp_chi$n, win = boundary_owin_chi)
+  sim_model_chi <- ppm(sim_ppp_chi ~ pop_im_chi)
+  coef_sim_chi[i] <- coef(sim_model_chi)["pop_im_chi"]
+}
 
-dist_im <- distmap(station_ppp)
-```
+p_value_chi <- (sum(coef_sim_chi >= coef_obs_chi) + 1) / (nsim + 1)
 
-```{r}
-m0 <- ppm(dock_ppp ~ 1)
-m1 <- ppm(dock_ppp ~ dist_im)
+hist(
+  coef_sim_chi,
+  main = "Chicago, IL: Monte Carlo Distribution of pop_im Coefficients",
+  xlab = "Simulated pop_im Coefficient",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(min(coef_sim_chi, coef_obs_chi), max(coef_sim_chi, coef_obs_chi))
+)
+abline(v = coef_obs_chi, col = "red", lwd = 3)
 
-anova(m0, m1, test = "LR")
-summary(m1)
+p_value_chi <- (sum(coef_sim_chi >= coef_obs_chi) + 1) / (nsim + 1)
+p_value_chi
 ```
 :::
 
-### Results
+### Monte Carlo Simulation Results against Population Density
 
-| City | Docks | Dock Intensity (points/unit squared) | `dist_im` coefficient | Z-value | Deviance diff |
-|------------|------------|----------------|------------|------------|------------|
+| Metropolitan Area | p-value |
+|-------------------|---------|
+| Washington, DC    |         |
+| New York, NY      |         |
+| Boston, MA        |         |
+| San Francisco, CA |         |
+| Chicago, IL       |         |
+
+## Hypothesis Test: Other Transit options
+
+### Correlation Functions
+
+::: panel-tabset
+### Washington, DC
+
+```{r}
+stations_proj_dc <- st_transform(stations_dc, 32618)
+docks_proj_dc <- st_transform(docks_dc, 32618)
+boundary_proj_dc <- st_transform(hull_buffered_wgs84_dc, 32618)
+
+boundary_owin_dc <- as.owin(boundary_proj_dc)
+dock_coords_dc <- st_coordinates(docks_proj_dc)
+dock_ppp_dc <- ppp(x = dock_coords_dc[,1],
+                y = dock_coords_dc[,2],
+                window = boundary_owin_dc)
+
+station_coords_dc <- st_coordinates(stations_proj_dc)
+station_ppp_dc <- ppp(x = station_coords_dc[,1],
+                   y = station_coords_dc[,2],
+                   window = boundary_owin_dc)
+
+dist_im_dc <- distmap(station_ppp_dc)
+```
+
+```{r}
+m0_dc <- ppm(dock_ppp_dc ~ 1)
+m1_dc <- ppm(dock_ppp_dc ~ dist_im_dc)
+
+anova(m0_dc, m1_dc, test = "LR")
+summary(m1_dc)
+```
+
+### New York, NY
+
+```{r}
+stations_proj_nyc <- st_transform(stations_nyc, 32618)
+docks_proj_nyc <- st_transform(docks_nyc, 32618)
+boundary_proj_nyc <- st_transform(hull_buffered_wgs84_nyc, 32618)
+
+boundary_owin_nyc <- as.owin(boundary_proj_nyc)
+dock_coords_nyc <- st_coordinates(docks_proj_nyc)
+dock_ppp_nyc <- ppp(x = dock_coords_nyc[,1],
+                y = dock_coords_nyc[,2],
+                window = boundary_owin_nyc)
+
+station_coords_nyc <- st_coordinates(stations_proj_nyc)
+station_ppp_nyc <- ppp(x = station_coords_nyc[,1],
+                   y = station_coords_nyc[,2],
+                   window = boundary_owin_nyc)
+
+dist_im_nyc <- distmap(station_ppp_nyc)
+```
+
+```{r}
+m0_nyc <- ppm(dock_ppp_nyc ~ 1)
+m1_nyc <- ppm(dock_ppp_nyc ~ dist_im_nyc)
+
+anova(m0_nyc, m1_nyc, test = "LR")
+summary(m1_nyc)
+```
+
+### Boston, MA
+
+```{r}
+stations_proj_bos <- st_transform(stations_bos, 32618)
+docks_proj_bos <- st_transform(docks_bos, 32618)
+boundary_proj_bos <- st_transform(hull_buffered_wgs84_bos, 32618)
+
+boundary_owin_bos <- as.owin(boundary_proj_bos)
+dock_coords_bos <- st_coordinates(docks_proj_bos)
+dock_ppp_bos <- ppp(x = dock_coords_bos[,1],
+                y = dock_coords_bos[,2],
+                window = boundary_owin_bos)
+
+station_coords_bos <- st_coordinates(stations_proj_bos)
+station_ppp_bos <- ppp(x = station_coords_bos[,1],
+                   y = station_coords_bos[,2],
+                   window = boundary_owin_bos)
+
+dist_im_bos <- distmap(station_ppp_bos)
+```
+
+```{r}
+m0_bos <- ppm(dock_ppp_bos ~ 1)
+m1_bos <- ppm(dock_ppp_bos ~ dist_im_bos)
+
+anova(m0_bos, m1_bos, test = "LR")
+summary(m1_bos)
+```
+
+### San Francisco, CA
+
+```{r}
+stations_proj_sf <- st_transform(stations_sf, 32618)
+docks_proj_sf <- st_transform(docks_sf, 32618)
+boundary_proj_sf <- st_transform(hull_buffered_wgs84_sf, 32618)
+
+boundary_owin_sf <- as.owin(boundary_proj_sf)
+dock_coords_sf <- st_coordinates(docks_proj_sf)
+dock_ppp_sf <- ppp(x = dock_coords_sf[,1],
+                y = dock_coords_sf[,2],
+                window = boundary_owin_sf)
+
+station_coords_sf <- st_coordinates(stations_proj_sf)
+station_ppp_sf <- ppp(x = station_coords_sf[,1],
+                   y = station_coords_sf[,2],
+                   window = boundary_owin_sf)
+
+dist_im_sf <- distmap(station_ppp_sf)
+```
+
+```{r}
+m0_sf <- ppm(dock_ppp_sf ~ 1)
+m1_sf <- ppm(dock_ppp_sf ~ dist_im_sf)
+
+anova(m0_sf, m1_sf, test = "LR")
+summary(m1_sf)
+```
+
+### Chicago, IL
+
+```{r}
+stations_proj_chi <- st_transform(stations_chi, 32618)
+docks_proj_chi <- st_transform(docks_chi, 32618)
+boundary_proj_chi <- st_transform(hull_buffered_wgs84_chi, 32618)
+
+boundary_owin_chi <- as.owin(boundary_proj_chi)
+dock_coords_chi <- st_coordinates(docks_proj_chi)
+dock_ppp_chi <- ppp(x = dock_coords_chi[,1],
+                y = dock_coords_chi[,2],
+                window = boundary_owin_chi)
+
+station_coords_chi <- st_coordinates(stations_proj_chi)
+station_ppp_chi <- ppp(x = station_coords_chi[,1],
+                   y = station_coords_chi[,2],
+                   window = boundary_owin_chi)
+
+dist_im_chi <- distmap(station_ppp_chi)
+```
+
+```{r}
+m0_chi <- ppm(dock_ppp_chi ~ 1)
+m1_chi <- ppm(dock_ppp_chi ~ dist_im_chi)
+
+anova(m0_chi, m1_chi, test = "LR")
+summary(m1_chi)
+```
+:::
+
+### Relationship to Train Station Locations (Poisson Point Process)
+
+| Metropolitan Area | Docks | Dock Intensity (points/meter squared) | `dist_im` coefficient | Z-value | Deviance diff |
+|------------|------------|------------|------------|------------|------------|
 | Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $-1.09 \times 10^{-3}$ | $-23.96$ | $1112.3$ |
 | New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $-1.61 \times 10^{-3}$ | $-25.90$ | $1174.6$ |
 | Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $-1.46 \times 10^{-3}$ | $-12.29$ | $263.95$ |
 | San Francisco, CA | $107$ | $8.44 \times 10^{-7}$ | $-2.97 \times 10^{-04}$ | $-2.83$ | $9.655$ |
 | Chicago, IL | $909$ | $3.77 \times 10^{-6}$ | $-8.24 \times 10^{-4}$ | $-17.02$ | $386.02$ |
+
+### Monte Carlo Simulations
+
+::: panel-tabset
+### Washington, DC
+
+```{r}
+stations_proj_dc <- st_transform(stations_dc, 32618)
+station_coords_dc <- st_coordinates(stations_proj_dc)
+
+station_ppp_dc <- ppp(
+  x = station_coords_dc[,1],
+  y = station_coords_dc[,2],
+  window = boundary_owin_dc
+)
+
+obs_dist_dc <- nndist(dock_ppp_dc, station_ppp_dc)
+obs_mean_dist_dc <- mean(obs_dist_dc)
+
+
+nsim <- 999
+sim_mean_dist_dc <- numeric(nsim)
+
+for (i in 1:nsim) {
+  sim_ppp_dc <- rpoint(
+    n = dock_ppp_dc$n,
+    f = pop_im_dc,
+    win = boundary_owin_dc
+  )
+  sim_dist <- nndist(sim_ppp_dc, station_ppp_dc)
+  sim_mean_dist_dc[i] <- mean(sim_dist)
+}
+
+
+p_value_dc <- (sum(sim_mean_dist_dc <= obs_mean_dist_dc) + 1) / (nsim + 1)
+
+x_min <- min(sim_mean_dist_dc, obs_mean_dist_dc)
+x_max <- max(sim_mean_dist_dc, obs_mean_dist_dc)
+
+hist(
+  sim_mean_dist_dc,
+  main = "Washington, DC: Monte Carlo Distribution of\nDistance from Docks to Nearest Train Station",
+  xlab = "Simulated Mean Distance",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(x_min, x_max)
+)
+
+abline(v = obs_mean_dist_dc, col = "red", lwd = 3)
+p_value_dc
+```
+
+### New York, NY
+
+```{r}
+stations_proj_nyc <- st_transform(stations_nyc, 32618)
+station_coords_nyc <- st_coordinates(stations_proj_nyc)
+
+station_ppp_nyc <- ppp(
+  x = station_coords_nyc[,1],
+  y = station_coords_nyc[,2],
+  window = boundary_owin_nyc
+)
+
+obs_dist_nyc <- nndist(dock_ppp_nyc, station_ppp_nyc)
+obs_mean_dist_nyc <- mean(obs_dist_nyc)
+
+
+nsim <- 999
+sim_mean_dist_nyc <- numeric(nsim)
+
+for (i in 1:nsim) {
+  sim_ppp_nyc <- rpoint(
+    n = dock_ppp_nyc$n,
+    f = pop_im_nyc,
+    win = boundary_owin_nyc
+  )
+  sim_dist <- nndist(sim_ppp_nyc, station_ppp_nyc)
+  sim_mean_dist_nyc[i] <- mean(sim_dist)
+}
+
+
+p_value_nyc <- (sum(sim_mean_dist_nyc <= obs_mean_dist_nyc) + 1) / (nsim + 1)
+
+x_min <- min(sim_mean_dist_nyc, obs_mean_dist_nyc)
+x_max <- max(sim_mean_dist_nyc, obs_mean_dist_nyc)
+
+hist(
+  sim_mean_dist_nyc,
+  main = "New York, NY: Monte Carlo Distribution of\nDistance from Docks to Nearest Train Station",
+  xlab = "Simulated Mean Distance",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(x_min, x_max)
+)
+
+abline(v = obs_mean_dist_nyc, col = "red", lwd = 3)
+p_value_nyc
+```
+
+### Boston, MA
+
+```{r}
+stations_proj_bos <- st_transform(stations_bos, 32618)
+station_coords_bos <- st_coordinates(stations_proj_bos)
+
+station_ppp_bos <- ppp(
+  x = station_coords_bos[,1],
+  y = station_coords_bos[,2],
+  window = boundary_owin_bos
+)
+
+obs_dist_bos <- nndist(dock_ppp_bos, station_ppp_bos)
+obs_mean_dist_bos <- mean(obs_dist_bos)
+
+
+nsim <- 999
+sim_mean_dist_bos <- numeric(nsim)
+
+for (i in 1:nsim) {
+  sim_ppp_bos <- rpoint(
+    n = dock_ppp_bos$n,
+    f = pop_im_bos,
+    win = boundary_owin_bos
+  )
+  sim_dist <- nndist(sim_ppp_bos, station_ppp_bos)
+  sim_mean_dist_bos[i] <- mean(sim_dist)
+}
+
+
+p_value_bos <- (sum(sim_mean_dist_bos <= obs_mean_dist_bos) + 1) / (nsim + 1)
+
+x_min <- min(sim_mean_dist_bos, obs_mean_dist_bos)
+x_max <- max(sim_mean_dist_bos, obs_mean_dist_bos)
+
+hist(
+  sim_mean_dist_bos,
+  main = "Boston, MA: Monte Carlo Distribution of\nDistance from Docks to Nearest Train Station",
+  xlab = "Simulated Mean Distance",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(x_min, x_max)
+)
+
+abline(v = obs_mean_dist_bos, col = "red", lwd = 3)
+p_value_bos
+```
+
+### San Francisco, CA
+
+```{r}
+stations_proj_sf <- st_transform(stations_sf, 32618)
+station_coords_sf <- st_coordinates(stations_proj_sf)
+
+station_ppp_sf <- ppp(
+  x = station_coords_sf[,1],
+  y = station_coords_sf[,2],
+  window = boundary_owin_sf
+)
+
+obs_dist_sf <- nndist(dock_ppp_sf, station_ppp_sf)
+obs_mean_dist_sf <- mean(obs_dist_sf)
+
+
+nsim <- 999
+sim_mean_dist_sf <- numeric(nsim)
+
+for (i in 1:nsim) {
+  sim_ppp_sf <- rpoint(
+    n = dock_ppp_sf$n,
+    f = pop_im_sf,
+    win = boundary_owin_sf
+  )
+  sim_dist <- nndist(sim_ppp_sf, station_ppp_sf)
+  sim_mean_dist_sf[i] <- mean(sim_dist)
+}
+
+
+p_value_sf <- (sum(sim_mean_dist_sf <= obs_mean_dist_sf) + 1) / (nsim + 1)
+
+x_min <- min(sim_mean_dist_sf, obs_mean_dist_sf)
+x_max <- max(sim_mean_dist_sf, obs_mean_dist_sf)
+
+hist(
+  sim_mean_dist_sf,
+  main = "San Francisco, CA: Monte Carlo Distribution of\nDistance from Docks to Nearest Train Station",
+  xlab = "Simulated Mean Distance",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(x_min, x_max)
+)
+
+abline(v = obs_mean_dist_sf, col = "red", lwd = 3)
+p_value_sf
+```
+
+### Chicago, IL
+
+```{r}
+stations_proj_chi <- st_transform(stations_chi, 32618)
+station_coords_chi <- st_coordinates(stations_proj_chi)
+
+station_ppp_chi <- ppp(
+  x = station_coords_chi[,1],
+  y = station_coords_chi[,2],
+  window = boundary_owin_chi
+)
+
+obs_dist_chi <- nndist(dock_ppp_chi, station_ppp_chi)
+obs_mean_dist_chi <- mean(obs_dist_chi)
+
+
+nsim <- 999
+sim_mean_dist_chi <- numeric(nsim)
+
+for (i in 1:nsim) {
+  sim_ppp_chi <- rpoint(
+    n = dock_ppp_chi$n,
+    f = pop_im_chi,
+    win = boundary_owin_chi
+  )
+  sim_dist <- nndist(sim_ppp_chi, station_ppp_chi)
+  sim_mean_dist_chi[i] <- mean(sim_dist)
+}
+
+
+p_value_chi <- (sum(sim_mean_dist_chi <= obs_mean_dist_chi) + 1) / (nsim + 1)
+
+x_min <- min(sim_mean_dist_chi, obs_mean_dist_chi)
+x_max <- max(sim_mean_dist_chi, obs_mean_dist_chi)
+
+hist(
+  sim_mean_dist_chi,
+  main = "Chicago, IL: Monte Carlo Distribution of\nDistance from Docks to Nearest Train Station",
+  xlab = "Simulated Mean Distance",
+  breaks = 30,
+  col = "lightgray",
+  border = "white",
+  xlim = c(x_min, x_max)
+)
+
+abline(v = obs_mean_dist_chi, col = "red", lwd = 3)
+p_value_chi
+```
+:::
+
+### Monte Carlo Simulation Results against Train Stations
+
+| Metropolitan Area | p-value |
+|-------------------|---------|
+| Washington, DC    |         |
+| New York, NY      |         |
+| Boston, MA        |         |
+| San Francisco, CA |         |
+| Chicago, IL       |         |
+
+## Discussion
