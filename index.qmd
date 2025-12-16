@@ -1,11 +1,10 @@
 ---
-title: Strategic Analysis of Micromobility Dock Deployment
+title: Analysis of Micromobility Dock Deployment Strategies
 authors:
   - name: Joshua Sweren
     affiliation: Georgetown University
     roles: writing
     corresponding: true
-bibliography: references.bib
 format:
   html:
     embed-resources: true
@@ -18,6 +17,8 @@ toc: true
 ---
 
 ```{r}
+#| echo: false
+#| include: false
 #install.packages(c("osmdata", "sf", "dplyr", "ggplot2", "rnaturalearth"))
 library(osmdata)
 library(sf)
@@ -44,9 +45,13 @@ library(leaflet)
 
 Over the last decade, bikeshare systems have become increasingly prevalent in cities around the world in recent years, offering residents and visitors a convenient, low-cost, and environmentally friendly transportation option. However, the spatial deployment of these systems has significant implications over which communities benefit the most and the extent to which they can be of service. This project will analyze the geographic distribution of micromobility stations in several metropolitan areas and evaluate how access to these low-cost transportation options varies across neighborhoods.
 
-As of October 2025, there are five metropolitan areas in the U.S. whose docked bikeshare ridership far exceeds the rest: New York City, Boston, San Francisco, Chicago, and Washington, DC. These cities’ bikeshare systems each boast consistent monthly ridership of over 400,000, while the sixth-place city registers under 100,000. Thus, this project will focus on five cities with proven commitment to developing a system with geographic breadth. Unsurprisingly, these cities also have existing robust public transit networks, so this project will not only look at spatial deployment in relation to population, but also in relation to existing amenities for certain residents. Using OpenStreetMap data to locate bikeshare docks and other transit hubs, along with U.S. Census data to map population density, we will compare how bikeshare has been spatially deployed in its most prominent cases.
+As of October 2025, there are five metropolitan areas in the U.S. whose docked bikeshare ridership far exceeds the rest: New York City, Boston, San Francisco, Chicago, and Washington, DC. These cities’ bikeshare systems each boasted ridership of over 400,000 in October 2025, while the sixth-place city registered under 100,000.\[\^1\] These numbers are similarly disparate in other months. Thus, this project will focus on five cities with proven commitment to developing a system with geographic breadth. Unsurprisingly, these cities also have existing robust public transit networks, so this project will not only look at spatial deployment in relation to population, but also in relation to existing amenities for certain residents. Using OpenStreetMap data to locate bikeshare docks and other transit hubs, along with U.S. Census data to map population density, we will compare how bikeshare has been spatially deployed in its most prominent cases.
 
 ## Literature Review
+
+*Optimal locations for bikeshare stations: A new GIS based spatial approach*\[\^2\]:
+
+*Using a GIS-based spatial approach to determine the optimal locations of bikeshare stations: The case of Washington D.C*\[\^3\]:
 
 ## Methodology
 
@@ -55,9 +60,6 @@ Each city will be analyzed via the following sets of hypotheses:
 1.  Docks in relation to population density:
 
     -   **Null** **hypothesis**: There is no relationship between the spatial distribution of bikeshare docks and population density. Dock locations occur independently of areas with higher or lower population density.
-
-    <!-- -->
-
     -   **Alternative** **hypothesis**: There is a relationship between the spatial distribution of Capital Bikeshare docks and population density. Dock locations are more likely to occur in areas with higher population density.
 
 2.  Docks in relation to other public transit options:
@@ -77,6 +79,12 @@ The following information will then be gathered to test the hypotheses:
 -   Monte Carlo simulations to compare actual results to randomized data.
 
 ## Exploratory Data Analysis
+
+Prior to performing any hypothesis tests, we will start by plotting all bikeshare docks from each metropolitan area, along with a reasonable geographic region to surround them. The chosen methodology for selecting a region is to take a concave hull using `spdep` in R, with `0.2` as the argument for this function. This was chosen so that each metropolitan area's docks would fit in a contiguous region that accurately represents the extent of the system's reach, while limiting the amount of uninhabitable space that would be captured if we used a convex hull. Padding was added proportionally to the overall extent of each bikeshare system, simply to avoid docks being directly on the edge of our regions.
+
+The plots below visualize bikeshare docks, overlaid over these chosen regions for our five cities of interest.
+
+### Plotting the Docks
 
 ::: panel-tabset
 ### Washington, DC
@@ -106,8 +114,11 @@ docks_dc <- st_intersection(
 ```
 
 ```{r}
-mapview(hull_buffered_wgs84_dc, col.regions = "lightblue", alpha.regions = 0.3) +
-  mapview(docks_dc, col.regions = "red")
+mapview(hull_buffered_wgs84_dc,
+        col.regions = "lightblue",
+        alpha.regions = 0.3) +
+mapview(docks_dc, col.regions = "red",
+  layer.name = "Bikeshare Docks")
 ```
 
 ### New York, NY
@@ -139,7 +150,8 @@ docks_nyc <- st_intersection(
 
 ```{r}
 mapview(hull_buffered_wgs84_nyc, col.regions = "lightblue", alpha.regions = 0.3) +
-  mapview(docks_nyc, col.regions = "red")
+  mapview(docks_nyc, col.regions = "red",
+  layer.name = "Bikeshare Docks")
 ```
 
 ### Boston, MA
@@ -171,7 +183,8 @@ docks_bos <- st_intersection(
 
 ```{r}
 mapview(hull_buffered_wgs84_bos, col.regions = "lightblue", alpha.regions = 0.3) +
-  mapview(docks_bos, col.regions = "red")
+  mapview(docks_bos, col.regions = "red",
+  layer.name = "Bikeshare Docks")
 ```
 
 ### San Francisco, CA
@@ -203,7 +216,8 @@ docks_sf <- st_intersection(
 
 ```{r}
 mapview(hull_buffered_wgs84_sf, col.regions = "lightblue", alpha.regions = 0.3) +
-  mapview(docks_sf, col.regions = "red")
+  mapview(docks_sf, col.regions = "red",
+  layer.name = "Bikeshare Docks")
 ```
 
 ### Chicago, IL
@@ -235,16 +249,22 @@ docks_chi <- st_intersection(
 
 ```{r}
 mapview(hull_buffered_wgs84_chi, col.regions = "lightblue", alpha.regions = 0.3) +
-  mapview(docks_chi, col.regions = "red")
+  mapview(docks_chi, col.regions = "red",
+  layer.name = "Bikeshare Docks")
 ```
 :::
 
-## Plotting Other Data
+The pattern of docks without any additional data already show us some differences in layout. New York and Chicago appear to have the most exhaustive bikeshare systems, with docks spanning nearly the entire geographic region with relative frequency everywhere. In Boston and Washington, docks seem to be more strategically placed with clusters extending away from the downtown area in various directions. Meanwhile, San Francisco has more sporadic placement with clustering only appearing in the downtown area.
+
+While these maps all suggest divergent strategies for placing bikeshare docks, the next section will help pinpoint factors that may influence these decisions. Using Census data from `tidycensus` and train station locations from OpenStreetMap via the `osm` package, we can take a look at two variables that urban planners would likely be interested in, according to our literature review.
+
+### Plotting Other Data
 
 ::: panel-tabset
 ### Washington, DC
 
 ```{r}
+#| results: hide
 #census_api_key("5e8593d6e289e6ae04c33a019f4951ca2bdd9523", install = TRUE)
 dc_bg <- get_acs(
   geography = "block group",
@@ -346,6 +366,7 @@ leaflet() %>%
 ### New York, NY
 
 ```{r}
+#| results: hide
 nyc_bg <- get_acs(
   geography = "block group",
   variables = "B01003_001E",
@@ -446,6 +467,7 @@ leaflet() %>%
 ### Boston, MA
 
 ```{r}
+#| results: hide
 bos_bg <- get_acs(
   geography = "block group",
   variables = "B01003_001E",
@@ -546,6 +568,7 @@ leaflet() %>%
 ### San Francisco, CA
 
 ```{r}
+#| results: hide
 sf_bg <- get_acs(
   geography = "block group",
   variables = "B01003_001E",
@@ -746,32 +769,34 @@ leaflet() %>%
 
 ## Univariate Testing
 
+Prior to hypothesis testing, another valuable form of exploratory data analysis can be to simply quantify differences in bikeshare dock deployment via clustering. This can be accomplished by calculating **Moran's I**, a statistic that measures spatial autocorrelation within a region to indicate if nodes are clustered, disperse, or somewhere in between. The following section will output Moran's I values for all five cities, along with a `leaflet` plot for each one that highlights areas of greater clustering than average.
+
 ::: panel-tabset
 ### Washington, DC
 
 ```{r}
-coords <- st_coordinates(docks_dc)
+coords_dc <- st_coordinates(docks_dc)
 
-knn <- knearneigh(coords, k = 4)
-nb <- knn2nb(knn)
+knn_dc <- knearneigh(coords_dc, k = 4)
+nb_dc <- knn2nb(knn_dc)
 
-lw <- nb2listw(nb, style = "W")
+lw_dc <- nb2listw(nb_dc, style = "W")
 
-inv_dist <- sapply(1:nrow(coords), function(i) {
-  neighbors <- nb[[i]]
-  if(length(neighbors) == 0) return(0)
-  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+inv_dist_dc <- sapply(1:nrow(coords_dc), function(i) {
+  neighbors_dc <- nb_dc[[i]]
+  if(length(neighbors_dc) == 0) return(0)
+  1 / mean(sqrt((coords_dc[i,1]-coords_dc[neighbors_dc,1])^2 + (coords_dc[i,2]-coords_dc[neighbors_dc,2])^2))
 })
 
-moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
-moran_result
+moran_result_dc <- moran.test(inv_dist_dc, lw_dc, zero.policy = TRUE)
+moran_result_dc
 ```
 
 ```{r}
-dock_values <- inv_dist
+dock_values_dc <- inv_dist_dc
 
-localI <- localmoran(dock_values, lw, zero.policy = TRUE)
-docks_dc$localI <- localI[,1]
+localI_dc <- localmoran(dock_values_dc, lw_dc, zero.policy = TRUE)
+docks_dc$localI <- localI_dc[,1]
 
 leaflet(docks_dc) %>%
   addProviderTiles("CartoDB.Positron") %>%
@@ -786,28 +811,28 @@ leaflet(docks_dc) %>%
 ### New York, NY
 
 ```{r}
-coords <- st_coordinates(docks_nyc)
+coords_nyc <- st_coordinates(docks_nyc)
 
-knn <- knearneigh(coords, k = 4)
-nb <- knn2nb(knn)
+knn_nyc <- knearneigh(coords_nyc, k = 4)
+nb_nyc <- knn2nb(knn_nyc)
 
-lw <- nb2listw(nb, style = "W")
+lw_nyc <- nb2listw(nb_nyc, style = "W")
 
-inv_dist <- sapply(1:nrow(coords), function(i) {
-  neighbors <- nb[[i]]
-  if(length(neighbors) == 0) return(0)
-  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+inv_dist_nyc <- sapply(1:nrow(coords_nyc), function(i) {
+  neighbors_nyc <- nb_nyc[[i]]
+  if(length(neighbors_nyc) == 0) return(0)
+  1 / mean(sqrt((coords_nyc[i,1]-coords_nyc[neighbors_nyc,1])^2 + (coords_nyc[i,2]-coords_nyc[neighbors_nyc,2])^2))
 })
 
-moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
-moran_result
+moran_result_nyc <- moran.test(inv_dist_nyc, lw_nyc, zero.policy = TRUE)
+moran_result_nyc
 ```
 
 ```{r}
-dock_values <- inv_dist
+dock_values_nyc <- inv_dist_nyc
 
-localI <- localmoran(dock_values, lw, zero.policy = TRUE)
-docks_nyc$localI <- localI[,1]
+localI_nyc <- localmoran(dock_values_nyc, lw_nyc, zero.policy = TRUE)
+docks_nyc$localI <- localI_nyc[,1]
 
 leaflet(docks_nyc) %>%
   addProviderTiles("CartoDB.Positron") %>%
@@ -822,28 +847,28 @@ leaflet(docks_nyc) %>%
 ### Boston, MA
 
 ```{r}
-coords <- st_coordinates(docks_bos)
+coords_bos <- st_coordinates(docks_bos)
 
-knn <- knearneigh(coords, k = 4)
-nb <- knn2nb(knn)
+knn_bos <- knearneigh(coords_bos, k = 4)
+nb_bos <- knn2nb(knn_bos)
 
-lw <- nb2listw(nb, style = "W")
+lw_bos <- nb2listw(nb_bos, style = "W")
 
-inv_dist <- sapply(1:nrow(coords), function(i) {
-  neighbors <- nb[[i]]
-  if(length(neighbors) == 0) return(0)
-  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+inv_dist_bos <- sapply(1:nrow(coords_bos), function(i) {
+  neighbors_bos <- nb_bos[[i]]
+  if(length(neighbors_bos) == 0) return(0)
+  1 / mean(sqrt((coords_bos[i,1]-coords_bos[neighbors_bos,1])^2 + (coords_bos[i,2]-coords_bos[neighbors_bos,2])^2))
 })
 
-moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
-moran_result
+moran_result_bos <- moran.test(inv_dist_bos, lw_bos, zero.policy = TRUE)
+moran_result_bos
 ```
 
 ```{r}
-dock_values <- inv_dist
+dock_values_bos <- inv_dist_bos
 
-localI <- localmoran(dock_values, lw, zero.policy = TRUE)
-docks_bos$localI <- localI[,1]
+localI_bos <- localmoran(dock_values_bos, lw_bos, zero.policy = TRUE)
+docks_bos$localI <- localI_bos[,1]
 
 leaflet(docks_bos) %>%
   addProviderTiles("CartoDB.Positron") %>%
@@ -858,28 +883,28 @@ leaflet(docks_bos) %>%
 ### San Francisco, CA
 
 ```{r}
-coords <- st_coordinates(docks_sf)
+coords_sf <- st_coordinates(docks_sf)
 
-knn <- knearneigh(coords, k = 4)
-nb <- knn2nb(knn)
+knn_sf <- knearneigh(coords_sf, k = 4)
+nb_sf <- knn2nb(knn_sf)
 
-lw <- nb2listw(nb, style = "W")
+lw_sf <- nb2listw(nb_sf, style = "W")
 
-inv_dist <- sapply(1:nrow(coords), function(i) {
-  neighbors <- nb[[i]]
-  if(length(neighbors) == 0) return(0)
-  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+inv_dist_sf <- sapply(1:nrow(coords_sf), function(i) {
+  neighbors_sf <- nb_sf[[i]]
+  if(length(neighbors_sf) == 0) return(0)
+  1 / mean(sqrt((coords_sf[i,1]-coords_sf[neighbors_sf,1])^2 + (coords_sf[i,2]-coords_sf[neighbors_sf,2])^2))
 })
 
-moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
-moran_result
+moran_result_sf <- moran.test(inv_dist_sf, lw_sf, zero.policy = TRUE)
+moran_result_sf
 ```
 
 ```{r}
-dock_values <- inv_dist
+dock_values_sf <- inv_dist_sf
 
-localI <- localmoran(dock_values, lw, zero.policy = TRUE)
-docks_sf$localI <- localI[,1]
+localI_sf <- localmoran(dock_values_sf, lw_sf, zero.policy = TRUE)
+docks_sf$localI <- localI_sf[,1]
 
 leaflet(docks_sf) %>%
   addProviderTiles("CartoDB.Positron") %>%
@@ -894,28 +919,28 @@ leaflet(docks_sf) %>%
 ### Chicago, IL
 
 ```{r}
-coords <- st_coordinates(docks_chi)
+coords_chi <- st_coordinates(docks_chi)
 
-knn <- knearneigh(coords, k = 4)
-nb <- knn2nb(knn)
+knn_chi <- knearneigh(coords_chi, k = 4)
+nb_chi <- knn2nb(knn_chi)
 
-lw <- nb2listw(nb, style = "W")
+lw_chi <- nb2listw(nb_chi, style = "W")
 
-inv_dist <- sapply(1:nrow(coords), function(i) {
-  neighbors <- nb[[i]]
-  if(length(neighbors) == 0) return(0)
-  1 / mean(sqrt((coords[i,1]-coords[neighbors,1])^2 + (coords[i,2]-coords[neighbors,2])^2))
+inv_dist_chi <- sapply(1:nrow(coords_chi), function(i) {
+  neighbors_chi <- nb_chi[[i]]
+  if(length(neighbors_chi) == 0) return(0)
+  1 / mean(sqrt((coords_chi[i,1]-coords_chi[neighbors_chi,1])^2 + (coords_chi[i,2]-coords_chi[neighbors_chi,2])^2))
 })
 
-moran_result <- moran.test(inv_dist, lw, zero.policy = TRUE)
-moran_result
+moran_result_chi <- moran.test(inv_dist_chi, lw_chi, zero.policy = TRUE)
+moran_result_chi
 ```
 
 ```{r}
-dock_values <- inv_dist
+dock_values_chi <- inv_dist_chi
 
-localI <- localmoran(dock_values, lw, zero.policy = TRUE)
-docks_chi$localI <- localI[,1]
+localI_chi <- localmoran(dock_values_chi, lw_chi, zero.policy = TRUE)
+docks_chi$localI <- localI_chi[,1]
 
 leaflet(docks_chi) %>%
   addProviderTiles("CartoDB.Positron") %>%
@@ -932,13 +957,20 @@ leaflet(docks_chi) %>%
 
 | Metropolitan Area | Moran's I Statistic |
 |-------------------|---------------------|
-| Washington, DC    | $0.8444759043$      |
+| Washington, DC    | $0.8418107214$      |
 | New York, NY      | $0.6827748494$      |
 | Boston, MA        | $0.842640558$       |
 | San Francisco, CA | $0.808442476$       |
 | Chicago, IL       | $0.9584339511$      |
 
 ## Hypothesis Test: Population Density
+
+Our first hypothesis tests will pertain to population density. As a reminder the null and alternative hypotheses are:
+
+-   **Null** **hypothesis**: There is no relationship between the spatial distribution of bikeshare docks and population density. Dock locations occur independently of areas with higher or lower population density.
+-   **Alternative** **hypothesis**: There is a relationship between the spatial distribution of Capital Bikeshare docks and population density. Dock locations are more likely to occur in areas with higher population density.
+
+To test these, we will first look at correlation functions to quantify the relationship between dock locations and population density. Specifically, we will be using a likelihood ratio test within the framework of a Poisson Point Process to get both the statistical significance of the population density coefficient and a likelihood ratio that compares a model that relies on population density to a null model that is spatially homogeneous. The following section contains the process for executing these tests, with a table displaying relevant results at the end.
 
 ### Correlation Functions
 
@@ -1222,20 +1254,23 @@ anova(m0_chi, m1_chi, test="LR")
 
 ### Correlation Function Results against Population Density
 
-| Metropolitan Area | Docks | Dock Intensity (points/unit squared) | `pop_im` coefficient | Z-value | Deviance diff |
-|------------|------------|------------|------------|------------|------------|
-| Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $1.913 \times 10^{-4}$ | $33.74$ | $683.18$ |
-| New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $2.121 \times 10^-5$ | $22.44$ | $436.56$ |
-| Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $9.189 \times 10^{-5}$ | $11.41$ | $105.4$ |
-| San Francisco, CA | $107$ | $6.35 \times 10^{-6}$ | $3.904 \times 10^{-5}$ | $2.60$ | $6.436$ |
-| Chicago, IL | $909$ | $3.77 \times 10^{-6}$ | $9.194 \times 10^{-5}$ | $19.56$ | $269.89$ |
+| Metropolitan Area | Docks   | `pop_im` coefficient   | Z-value | Deviance diff |
+|-------------------|---------|------------------------|---------|---------------|
+| Washington, DC    | $780$   | $1.530 \times 10^{-4}$ | $25.07$ | $423.41$      |
+| New York, NY      | $2,303$ | $1.590 \times 10^{-5}$ | $16.16$ | $235.86$      |
+| Boston, MA        | $320$   | $5.221 \times 10^{-5}$ | $6.32$  | $35.81$       |
+| San Francisco, CA | $107$   | $3.529 \times 10^{-5}$ | $2.76$  | $6.96$        |
+| Chicago, IL       | $909$   | $8.919 \times 10^{-5}$ | $18.61$ | $248.94$      |
 
 ### Monte Carlo Simulations
+
+In addition to our Poisson Point Process, performing Monte Carlo simulations can provide extra confirmation of our findings by comparing the real-world deployments of bikeshare docks with randomized placements based on controlled conditions. For testing this hypothesis, all we need to do is simulate randomized placements that are based on no outside bias and see if we get results that are more or less tethered to population density. This will be quantified by checking how the population density coefficients compare to the real value. The proportion of simulated coefficients that exceed the real coefficient will serve as our p-value. The following section executes 999 simulations for each city, with a table of results at the end.
 
 ::: panel-tabset
 ### Washington, DC
 
 ```{r}
+set.seed(202)
 model_obs_dc <- ppm(dock_ppp_dc ~ pop_im_dc)
 coef_obs_dc <- coef(model_obs_dc)["pop_im_dc"]
 
@@ -1398,13 +1433,21 @@ p_value_chi
 
 | Metropolitan Area | p-value |
 |-------------------|---------|
-| Washington, DC    |         |
-| New York, NY      |         |
-| Boston, MA        |         |
-| San Francisco, CA |         |
-| Chicago, IL       |         |
+| Washington, DC    | $0.001$ |
+| New York, NY      | $0.001$ |
+| Boston, MA        | $0.001$ |
+| San Francisco, CA | $0.005$ |
+| Chicago, IL       | $0.001$ |
 
-## Hypothesis Test: Other Transit options
+## Hypothesis Test: Train Stations
+
+While testing bikeshare dock locations against population density revealed some interesting differences in deployment strategy, it is reasonable to presume that there are other factors that influence these decisions. As stated in the introduction and literature review, considering access to public transit can tell us a lot about the purpose of bikeshare: whether it targets people who lack other car-free transit options, serves as a complement to public transit, or does not consider this factor at all. Thus, we will be testing the following hypotheses:
+
+-   **Null hypothesis**: There is no relationship between the spatial distribution of bikeshare docks and the presence of other public transit nodes.
+
+-   **Alternative hypothesis:** There is a relationship between the spatial distribution of bikeshare docks and the presence of other public transit nodes. Dock locations are more likely to be placed in areas with existing public transit infrastructure.
+
+The first method of testing these hypotheses will be similar to the correlation functions from the previous section. We will again use Poisson Point Processes to obtain the coefficient of the distance from each dock to its nearest train station, as well as the likelihood ratio to compare to a null model.
 
 ### Correlation Functions
 
@@ -1555,17 +1598,21 @@ summary(m1_chi)
 ```
 :::
 
-### Relationship to Train Station Locations (Poisson Point Process)
+### Correlation Function Results against Train Station Locations
 
-| Metropolitan Area | Docks | Dock Intensity (points/meter squared) | `dist_im` coefficient | Z-value | Deviance diff |
-|------------|------------|------------|------------|------------|------------|
-| Washington, DC | $774$ | $5.06 \times 10^{-7}$ | $-1.09 \times 10^{-3}$ | $-23.96$ | $1112.3$ |
-| New York, NY | $2,303$ | $1.5 \times 10^{-5}$ | $-1.61 \times 10^{-3}$ | $-25.90$ | $1174.6$ |
-| Boston, MA | $320$ | $1.08 \times 10^{-5}$ | $-1.46 \times 10^{-3}$ | $-12.29$ | $263.95$ |
-| San Francisco, CA | $107$ | $8.44 \times 10^{-7}$ | $-2.97 \times 10^{-04}$ | $-2.83$ | $9.655$ |
-| Chicago, IL | $909$ | $3.77 \times 10^{-6}$ | $-8.24 \times 10^{-4}$ | $-17.02$ | $386.02$ |
+| Metropolitan Area | Docks   | `dist_im` coefficient   | Z-value  | Deviance diff |
+|---------------|---------------|---------------|---------------|---------------|
+| Washington, DC    | $774$   | $-9.08 \times 10^{-4}$  | $-19.30$ | $584.99$      |
+| New York, NY      | $2,303$ | $-1.22 \times 10^{-3}$  | $-18.27$ | $420.63$      |
+| Boston, MA        | $320$   | $-9.88 \times 10^{-4}$  | $-8.88$  | $115.03$      |
+| San Francisco, CA | $107$   | $-2.91 \times 10^{-04}$ | $-2.76$  | $9.337$       |
+| Chicago, IL       | $909$   | $-7.70 \times 10^{-4}$  | $-15.53$ | $305.55$      |
 
 ### Monte Carlo Simulations
+
+Similar to our other hypothesis test, running Monte Carlo simulations will help us better understand how real data compares to data that we can generate under specified conditions. Unlike the previous section, we will use this to distinguish between systems that happen to place docks close to train stations by nature of following population density from those that intentionally seek out locations with more or less access to public transit.
+
+Therefore, in these 999 Monte Carlo simulations for each city, we will generate simulations that place docks proportionally to population density. We can then compare the coefficients for distance to the nearest train station, seeing if the real data has a stronger dependence on this variable than data with a bias towards denser areas. The process and results of these tests are below.
 
 ::: panel-tabset
 ### Washington, DC
@@ -1814,14 +1861,22 @@ p_value_chi
 ```
 :::
 
-### Monte Carlo Simulation Results against Train Stations
+### Monte Carlo Simulation Results against Train Station Locations
 
 | Metropolitan Area | p-value |
 |-------------------|---------|
-| Washington, DC    |         |
-| New York, NY      |         |
-| Boston, MA        |         |
-| San Francisco, CA |         |
-| Chicago, IL       |         |
+| Washington, DC    | $0.001$ |
+| New York, NY      | $1$     |
+| Boston, MA        | $0.843$ |
+| San Francisco, CA | $0.626$ |
+| Chicago, IL       | $1$     |
 
 ## Discussion
+
+## References
+
+\[\^1\]: “Docked bikeshare trips – October 2025,” Bureau of Transportation Statistics, https://www.bts.gov/newsroom/docked-bikeshare-trips-october-2025 (accessed Dec. 15, 2025).
+
+\[\^2\]: S. Banerjee, Md. M. Kabir, N. K. Khadem, and C. Chavis, “Optimal locations for bikeshare stations: A new GIS based spatial approach,” *Transportation Research Interdisciplinary Perspectives*, vol. 4, p. 100101, Mar. 2020. doi:10.1016/j.trip.2020.100101
+
+\[\^3\]: Z. Dehdari Ebrahimi, M. Momenitabar, A. A. Nasri, and J. Mattson, “Using a GIS-based spatial approach to determine the optimal locations of bikeshare stations: The case of Washington D.C,” *Transport Policy*, vol. 127, pp. 48–60, Oct. 2022. doi:10.1016/j.tranpol.2022.08.008
