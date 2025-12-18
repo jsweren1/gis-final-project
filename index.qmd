@@ -16,9 +16,7 @@ execute:
 toc: true
 ---
 
-```{r}
-#| echo: false
-#| include: false
+```{r, include=FALSE}
 #install.packages(c("osmdata", "sf", "dplyr", "ggplot2", "rnaturalearth"))
 library(osmdata)
 library(sf)
@@ -41,17 +39,30 @@ library(tidycensus)
 library(leaflet)
 ```
 
+Github repository: <https://github.com/jsweren1/gis-final-project>
+
 ## Introduction
 
 Over the last decade, bikeshare systems have become increasingly prevalent in cities around the world in recent years, offering residents and visitors a convenient, low-cost, and environmentally friendly transportation option. However, the spatial deployment of these systems has significant implications over which communities benefit the most and the extent to which they can be of service. This project will analyze the geographic distribution of micromobility stations in several metropolitan areas and evaluate how access to these low-cost transportation options varies across neighborhoods.
 
-As of October 2025, there are five metropolitan areas in the U.S. whose docked bikeshare ridership far exceeds the rest: New York City, Boston, San Francisco, Chicago, and Washington, DC. These cities’ bikeshare systems each boasted ridership of over 400,000 in October 2025, while the sixth-place city registered under 100,000.\[\^1\] These numbers are similarly disparate in other months. Thus, this project will focus on five cities with proven commitment to developing a system with geographic breadth. Unsurprisingly, these cities also have existing robust public transit networks, so this project will not only look at spatial deployment in relation to population, but also in relation to existing amenities for certain residents. Using OpenStreetMap data to locate bikeshare docks and other transit hubs, along with U.S. Census data to map population density, we will compare how bikeshare has been spatially deployed in its most prominent cases.
+As of October 2025, there are five metropolitan areas in the U.S. whose docked bikeshare ridership far exceeds the rest: New York City, Boston, San Francisco, Chicago, and Washington, DC. These cities’ bikeshare systems each boasted ridership of over 400,000 in October 2025, while the sixth-place city registered under 100,000.[^1] These numbers are similarly disparate in other months. Thus, this project will focus on five cities with proven commitment to developing a system with geographic breadth. Unsurprisingly, these cities also have existing robust public transit networks, so this project will not only look at spatial deployment in relation to population, but also in relation to existing amenities for certain residents. Using OpenStreetMap data to locate bikeshare docks and other transit hubs, along with U.S. Census data to map population density, we will compare how bikeshare has been spatially deployed in its most prominent cases.
+
+[^1]: “Docked bikeshare trips – October 2025,” Bureau of Transportation Statistics, https://www.bts.gov/newsroom/docked-bikeshare-trips-october-2025 (accessed Dec. 15, 2025).
 
 ## Literature Review
 
-*Optimal locations for bikeshare stations: A new GIS based spatial approach*\[\^2\]:
+The following articles were provided important context on what research has already been done regarding this topic:
 
-*Using a GIS-based spatial approach to determine the optimal locations of bikeshare stations: The case of Washington D.C*\[\^3\]:
+1.  *Optimal locations for bikeshare stations: A new GIS based spatial approach*[^2]
+2.  *Using a GIS-based spatial approach to determine the optimal locations of bikeshare stations: The case of Washington D.C*[^3]
+
+[^2]: S. Banerjee, Md. M. Kabir, N. K. Khadem, and C. Chavis, “Optimal locations for bikeshare stations: A new GIS based spatial approach,” *Transportation Research Interdisciplinary Perspectives*, vol. 4, p. 100101, Mar. 2020. doi:10.1016/j.trip.2020.100101
+
+[^3]: Z. Dehdari Ebrahimi, M. Momenitabar, A. A. Nasri, and J. Mattson, “Using a GIS-based spatial approach to determine the optimal locations of bikeshare stations: The case of Washington D.C,” *Transport Policy*, vol. 127, pp. 48–60, Oct. 2022. doi:10.1016/j.tranpol.2022.08.008
+
+These articles analyzed bikeshare dock location strategies in Baltimore and Washington, D.C., respectively. The authors studying Baltimore focused mainly on optimizing usage of these docks and understanding what factors lead to greater ridership. They found that bikeshare usage depended heavily on the presence of neighboring docks, meaning clustered docks tended to benefit people more than isolated ones. In the case of Baltimore, the bikeshare system is significantly less thorough and mature than the five cities we will be studying, so the effects of isolated bikeshare docks were perhaps more apparent than we would find. This indicates that it will be important to study the clustering of docks as a univariate test.
+
+The authors studying Washington, D.C. also focused on optimal locations, mainly as they relate to proximity to bus stops and train stations. For cities with existing public transit infrastructure, bikeshare can be seen as a supplement to heavily used services, not only as its own form of transportation. However, this study also emphasized the importance of bikeshare in "low-density residential neighborhoods where transit network coverage might be low". This highlights a need for us to look at spatial equity in micromobility infrastructure, as bikeshare systems can provide greater accessibility to cheaper transit options.
 
 ## Methodology
 
@@ -669,6 +680,7 @@ leaflet() %>%
 ### Chicago, IL
 
 ```{r}
+#| results: hide
 chi_bg <- get_acs(
   geography = "block group",
   variables = "B01003_001E",
@@ -766,6 +778,12 @@ leaflet() %>%
   )
 ```
 :::
+
+Adding train stations and population density to these maps starts provide some strategic insights as to where docks tend to cluster. Starting with Washington, D.C., the most heavily clustered areas reliably line up with dense populations that are often served by multiple train stations in close proximity. Meanwhile, the clusters of docks that stem out from the center of the city seem to line up nearly perfectly with train stations following the same pattern, indicating intentional design to follow existing public transit infrastructure.
+
+As mentioned in the previous section, New York and Chicago have similarly exhaustive coverage over their city, both with a higher density of docks in central areas. However, Chicago's system seems to increase dock density exclusively in population-dense areas. New York, on the other hand, has its greatest dock density in lower Manhattan, even in neighborhoods like midtown which has low population density. In contrast with the relatively sparse coverage in high-population upper Manhattan neighborhoods, we can surmise that this system was partially designed with commercial neighborhoods taking precedent over residential ones. In both cases, public transit does not jump out as having an effect on dock locations.
+
+Boston and San Francisco seem to diverge the most from population density, as Boston has a few dense neighborhoods that lack bikeshare coverage, and San Francisco's most dense area is curiously surrounded by bikeshare docks but doesn't contain them. Additionally, the docks seem to cover entirely different parts of the city than train stations in San Francisco, while no apparent pattern jumps out in Boston.
 
 ## Univariate Testing
 
@@ -962,6 +980,10 @@ leaflet(docks_chi) %>%
 | Boston, MA        | $0.842640558$       |
 | San Francisco, CA | $0.808442476$       |
 | Chicago, IL       | $0.9584339511$      |
+
+These maps and statistics mostly confirm some of the observations from the EDA section. The results to note are the differences outlined between New York and Chicago. Chicago's system, while spread out over the city, clearly is characterized by intense clustering in the downtown, such that it produces the highest Moran's I of the bunch. Meanwhile, New York's Moran's I tells us that most of the docks are intentionally spaced out more than in other cities, providing coverage to more neighborhoods and less favoritism towards certain regions.
+
+The other observation from this table is that all of the Moran's I statistics are relatively high, confirming a common-sense assumption that bikeshare docks tend to be placed in the presence of other bikeshare docks.
 
 ## Hypothesis Test: Population Density
 
@@ -1262,6 +1284,10 @@ anova(m0_chi, m1_chi, test="LR")
 | San Francisco, CA | $107$   | $3.529 \times 10^{-5}$ | $2.76$  | $6.96$        |
 | Chicago, IL       | $909$   | $8.919 \times 10^{-5}$ | $18.61$ | $248.94$      |
 
+This table offers us a good summation of how bikeshare dock locations correlate to population density. The first thing to note is that each test placed great importance on the population density coefficient, confirming that population density is positively correlated with docks in all five cities. However, the specific Z-values tell us that the extent of these correlations are not the same.
+
+Going in descending order of Z-value, Washington's system most closely follows population density, followed by Chicago and New York, while Boston and Chicago's docks are relatively loosely tied to where people live.
+
 ### Monte Carlo Simulations
 
 In addition to our Poisson Point Process, performing Monte Carlo simulations can provide extra confirmation of our findings by comparing the real-world deployments of bikeshare docks with randomized placements based on controlled conditions. For testing this hypothesis, all we need to do is simulate randomized placements that are based on no outside bias and see if we get results that are more or less tethered to population density. This will be quantified by checking how the population density coefficients compare to the real value. The proportion of simulated coefficients that exceed the real coefficient will serve as our p-value. The following section executes 999 simulations for each city, with a table of results at the end.
@@ -1287,8 +1313,8 @@ p_value_dc <- (sum(coef_sim_dc >= coef_obs_dc) + 1) / (nsim + 1)
 
 hist(
   coef_sim_dc,
-  main = "Washington, DC: Monte Carlo Distribution of pop_im Coefficients",
-  xlab = "Simulated pop_im Coefficient",
+  main = "Washington, DC: Monte Carlo Distribution of Population Density Coefficients",
+  xlab = "Simulated Population Density Coefficient",
   breaks = 30,
   col = "lightgray",
   border = "white",
@@ -1319,8 +1345,8 @@ p_value_nyc <- (sum(coef_sim_nyc >= coef_obs_nyc) + 1) / (nsim + 1)
 
 hist(
   coef_sim_nyc,
-  main = "New York, NY: Monte Carlo Distribution of pop_im Coefficients",
-  xlab = "Simulated pop_im Coefficient",
+  main = "New York, NY: Monte Carlo Distribution of Population Density Coefficients",
+  xlab = "Simulated Population Density Coefficient",
   breaks = 30,
   col = "lightgray",
   border = "white",
@@ -1351,8 +1377,8 @@ p_value_bos <- (sum(coef_sim_bos >= coef_obs_bos) + 1) / (nsim + 1)
 
 hist(
   coef_sim_bos,
-  main = "Boston, MA: Monte Carlo Distribution of pop_im Coefficients",
-  xlab = "Simulated pop_im Coefficient",
+  main = "Boston, MA: Monte Carlo Distribution of Population Density Coefficients",
+  xlab = "Simulated Population Density Coefficient",
   breaks = 30,
   col = "lightgray",
   border = "white",
@@ -1383,8 +1409,8 @@ p_value_sf <- (sum(coef_sim_sf >= coef_obs_sf) + 1) / (nsim + 1)
 
 hist(
   coef_sim_sf,
-  main = "San Francisco, CA: Monte Carlo Distribution of pop_im Coefficients",
-  xlab = "Simulated pop_im Coefficient",
+  main = "San Francisco, CA: Monte Carlo Distribution of Population Density Coefficients",
+  xlab = "Simulated Population Density Coefficient",
   breaks = 30,
   col = "lightgray",
   border = "white",
@@ -1415,8 +1441,8 @@ p_value_chi <- (sum(coef_sim_chi >= coef_obs_chi) + 1) / (nsim + 1)
 
 hist(
   coef_sim_chi,
-  main = "Chicago, IL: Monte Carlo Distribution of pop_im Coefficients",
-  xlab = "Simulated pop_im Coefficient",
+  main = "Chicago, IL: Monte Carlo Distribution of Population Density Coefficients",
+  xlab = "Simulated Population Density Coefficient",
   breaks = 30,
   col = "lightgray",
   border = "white",
@@ -1436,8 +1462,10 @@ p_value_chi
 | Washington, DC    | $0.001$ |
 | New York, NY      | $0.001$ |
 | Boston, MA        | $0.001$ |
-| San Francisco, CA | $0.005$ |
+| San Francisco, CA | $0.011$ |
 | Chicago, IL       | $0.001$ |
+
+This process, while it emphatically confirms our alternate hypothesis in almost all cases, proves less useful than deriving statistics via a Poisson Point Process. Looking at the histogram of population density coefficients, the real coefficient is comically far from all simulated results in Washington, New York, and Chicago. The interesting finding here is that San Francisco did produce some simulations with coefficients that exceeded the real value. This once again confirms that San Francisco's bikeshare system is uniquely only loosely tied to population density.
 
 ## Hypothesis Test: Train Stations
 
@@ -1607,6 +1635,8 @@ summary(m1_chi)
 | Boston, MA        | $320$   | $-9.88 \times 10^{-4}$  | $-8.88$  | $115.03$      |
 | San Francisco, CA | $107$   | $-2.91 \times 10^{-04}$ | $-2.76$  | $9.337$       |
 | Chicago, IL       | $909$   | $-7.70 \times 10^{-4}$  | $-15.53$ | $305.55$      |
+
+As we saw with the population density tests, all five null hypotheses are rejected by this process. The extent of how strong the coefficient representing distance to the nearest train station varies in a similar way to the population density coefficient, with the same cities experiencing roughly the same correlation. If we assume that population density and train station locations are heavily correlated, these results are heavily expected, so simply performing this test was not sufficient in isolating the presence of public transit.
 
 ### Monte Carlo Simulations
 
@@ -1867,16 +1897,22 @@ p_value_chi
 |-------------------|---------|
 | Washington, DC    | $0.001$ |
 | New York, NY      | $1$     |
-| Boston, MA        | $0.843$ |
-| San Francisco, CA | $0.626$ |
+| Boston, MA        | $0.817$ |
+| San Francisco, CA | $0.642$ |
 | Chicago, IL       | $1$     |
+
+These results provide the most evidence for diverging strategies for deploying bikeshare docks. We've eliminated population density as a factor by simulating placements that are influenced by population density, a phenomenon confirmed by the first set of hypothesis tests.
+
+In Washington, we can see that simulations give us bikeshare docks that are further away from nearby train stations than the real-life case. Interestingly, this is entirely flipped for New York and Chicago. This tells us that the deployment strategy in Washington deliberately favors those with access to existing public transit, while New York and Chicago provide bikeshare access to areas with less train service.
+
+Boston and San Francisco produced less decisive results, indicating that the presence of public transit may have been less of a consideration for designing those systems. We cannot definitively say that neighborhoods with abundant or lacking public transit are given greater bikeshare access than expected.
 
 ## Discussion
 
+Based on the results obtained above, we can conclude that there are multiply strategies for deploying bikeshare docks that result in successful systems with high usage. All five of these cities have far outpaced the rest of the country in producing heavily adopted bikeshare options. What this analysis provides is some insight into how organizers deal with conflicting priorities.
+
+On one hand, bikeshare docks provide a useful supplement to people that prefer car-free travel, who may be using it as an intermediary between longer-distance public transit. On the other hand, providing affordable transportation to those without other car-free options is certainly an appealing prospect. In Washington, we see a system that prioritizes the former, with bikeshare docks aligning strongly with train stations. In New York and Chicago, we see the opposite approach, with bikeshare options following population density to provide widespread access regardless of existing public transit coverage.
+
+Future analysis could be done by finding ways to better isolate specific variables, as well as identifying other potential influences on bikeshare dock placements. Additionally, including cities that have been less successful in implementing bikeshare systems with high usage could provide additional insight into what makes these systems work. Finally, obtaining data on ridership for each dock would be an interesting layer of analysis. To what extent do docks closer to population centers and train stations receive higher usage than the rest?
+
 ## References
-
-\[\^1\]: “Docked bikeshare trips – October 2025,” Bureau of Transportation Statistics, https://www.bts.gov/newsroom/docked-bikeshare-trips-october-2025 (accessed Dec. 15, 2025).
-
-\[\^2\]: S. Banerjee, Md. M. Kabir, N. K. Khadem, and C. Chavis, “Optimal locations for bikeshare stations: A new GIS based spatial approach,” *Transportation Research Interdisciplinary Perspectives*, vol. 4, p. 100101, Mar. 2020. doi:10.1016/j.trip.2020.100101
-
-\[\^3\]: Z. Dehdari Ebrahimi, M. Momenitabar, A. A. Nasri, and J. Mattson, “Using a GIS-based spatial approach to determine the optimal locations of bikeshare stations: The case of Washington D.C,” *Transport Policy*, vol. 127, pp. 48–60, Oct. 2022. doi:10.1016/j.tranpol.2022.08.008
